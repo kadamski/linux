@@ -78,6 +78,18 @@
 				clock-frequency = <172000000>;
 				status = "disabled";
 			};
+
+			pm_syscon: syscon@1c00 {
+				compatible = "simple-mfd", "syscon";
+				reg = <0x1c00 0x100>;
+
+				reboot {
+					compatible = "syscon-reboot";
+					regmap = <&pm_syscon>;
+					offset = <0xb8>;
+					mask = <0x79>;
+				};
+			};
 		};
 	};
 };

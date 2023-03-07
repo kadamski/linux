@@ -56,9 +56,8 @@
 &i2c2 {
 	status = "okay";
 
-	gpios = <&pinctrl 6 (GPIO_ACTIVE_HIGH|GPIO_PULL_UP) /* scl */
-			 &pinctrl 7 (GPIO_ACTIVE_HIGH|GPIO_PULL_UP) /* sda */
-			>;
+	pinctrl-0 = <&i2c_2_pins>;
+	pinctrl-names = "default";
 };
 
 &uart0 {

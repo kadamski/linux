@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include "bl808.dtsi"
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	model = "Pine64 Ox64";
@@ -18,7 +19,7 @@
 
 	chosen {
 		stdout-path = "serial0:2000000n8";
-		bootargs = "console=ttyS0,2000000 loglevel=8 earlycon=sbi root=/dev/mmcblk0p2 rootwait rootfstype=ext4";
+		bootargs = "console=ttyS0,2000000 loglevel=8 earlycon=sbi root=PARTLABEL=rootfs rootwait rootfstype=ext4";
 		linux,initrd-start = <0x0 0x52000000>;
 		linux,initrd-end = <0x0 0x52941784>;
 	};
@@ -41,10 +42,23 @@
 
 &pinctrl {
 	status = "okay";
+
+	i2c_2_pins: i2c-pins {
+		pins = "GPIO6", "GPIO7";
+		function = "i2c2";
+	};
 };
 
 &seceng {
 	status = "okay";
+};
+
+&i2c2 {
+	status = "okay";
+
+	gpios = <&pinctrl 6 (GPIO_ACTIVE_HIGH|GPIO_PULL_UP) /* scl */
+			 &pinctrl 7 (GPIO_ACTIVE_HIGH|GPIO_PULL_UP) /* sda */
+			>;
 };
 
 &uart0 {
@@ -60,9 +74,5 @@
 };
 
 &ehci0 {
-	status = "okay";
-};
-
-&enet0 {
 	status = "okay";
 };

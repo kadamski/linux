@@ -97,6 +97,48 @@
 			status = "disabled";
 		};
 
+		i2c0: i2c@2000A300 {
+			compatible = "bflb,bl808-i2c";
+			reg = <0x2000A300 0x0100>;
+			interrupts-extended = <&ipclic BFLB_IPC_SOURCE_M0
+								BFLB_IPC_DEVICE_I2C0
+								IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipclic BFLB_IPC_SOURCE_M0 BFLB_IPC_DEVICE_I2C0>;
+			clocks = <&xtal>;
+			clock-frequency = <100000>;
+			status = "disabled";
+		};
+
+		i2c1: i2c@2000A900 {
+			compatible = "bflb,bl808-i2c";
+			reg = <0x2000A900 0x0100>;
+			interrupts-extended = <&ipclic BFLB_IPC_SOURCE_M0
+								BFLB_IPC_DEVICE_I2C1
+								IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipclic BFLB_IPC_SOURCE_M0 BFLB_IPC_DEVICE_I2C1>;
+			clocks = <&xtal>;
+			clock-frequency = <100000>;
+			status = "disabled";
+		};
+
+		i2c2: i2c@30003000 {
+			compatible = "bflb,bl808-i2c";
+			reg = <0x30003000 0x1000>;
+			interrupts = <21 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&xtal>;
+			clock-frequency = <100000>;
+			status = "disabled";
+		};
+
+		i2c3: i2c@30004000 {
+			compatible = "bflb,bl808-i2c";
+			reg = <0x30004000 0x1000>;
+			interrupts = <22 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&xtal>;
+			clock-frequency = <100000>;
+			status = "disabled";
+		};
+
 		uart0: serial@30002000 {
 			compatible = "bflb,bl808-uart";
 			reg = <0x30002000 0x1000>;

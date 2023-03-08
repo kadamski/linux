@@ -106,6 +106,12 @@
 #define BL808_I2C_STS_NAK_MASK                  BIT(11)
 #define BL808_I2C_STS_ARB_MASK                  BIT(12)
 #define BL808_I2C_STS_FER_MASK                  BIT(13)
+#define BL808_I2C_STS_ALL_MASK                  (BL808_I2C_STS_END_MASK | \
+                                                 BL808_I2C_STS_TXF_MASK | \
+                                                 BL808_I2C_STS_RXF_MASK | \
+                                                 BL808_I2C_STS_NAK_MASK | \
+                                                 BL808_I2C_STS_ARB_MASK | \
+                                                 BL808_I2C_STS_FER_MASK)
 /* interrupt clears */
 #define BL808_I2C_STS_END_CLR                   BIT(16)
 #define BL808_I2C_STS_NAK_CLR                   BIT(19)
@@ -117,6 +123,12 @@
 #define BL808_I2C_STS_NAK_EN                    BIT(27)
 #define BL808_I2C_STS_ARB_EN                    BIT(28)
 #define BL808_I2C_STS_FER_EN                    BIT(29)
+#define BL808_I2C_STS_ALL_EN                    (BL808_I2C_STS_END_EN | \
+                                                 BL808_I2C_STS_TXF_EN | \
+                                                 BL808_I2C_STS_RXF_EN | \
+                                                 BL808_I2C_STS_NAK_EN | \
+                                                 BL808_I2C_STS_ARB_EN | \
+                                                 BL808_I2C_STS_FER_EN)
 
 #define BL808_I2C_SUB_ADDR_B0_SHIFT             UL(0)
 #define BL808_I2C_SUB_ADDR_B0_MASK              (0xff <<  BL808_I2C_SUB_ADDR_B0_SHIFT)
@@ -203,14 +215,18 @@ static inline void clk_bl808_i2c_set_rate(struct bl808_i2c_dev *i2c_dev, u32 fre
         u32 divider;
         u32 magic;
 
-        magic = 36750000u;
+        magic = 10000000u;
         divider = (magic/freq) -1;
 
+        if(divider > 255) {
+                divider = 0xff;
+        }
+
         /* use max divider regardless */
-        val =  (0xff) << BL808_I2C_PRD_S_PH_0_SHIFT;
-        val |= (0xff) << BL808_I2C_PRD_S_PH_1_SHIFT;
-        val |= (0xff) << BL808_I2C_PRD_S_PH_2_SHIFT;
-        val |= (0xff) << BL808_I2C_PRD_S_PH_3_SHIFT;
+        val =  (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_0_SHIFT;
+        val |= (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_1_SHIFT;
+        val |= (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_2_SHIFT;
+        val |= (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_3_SHIFT;
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_START, val);
         bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_DATA, val);
@@ -226,28 +242,30 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
 
         tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 
-        dev_dbg(i2c_dev->dev, "%u tx fifos free", tx_fifo_free);
+        while (tx_fifo_free > 0) {
+                dev_dbg(i2c_dev->dev, "%u tx fifos free", tx_fifo_free);
 
-        if (i2c_dev->msg_buf_remaining >= 4) {
-                for(u8 i = 0; i < 4; i++) {
-                        temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
+                if (i2c_dev->msg_buf_remaining >= 4) {
+                        for(u8 i = 0; i < 4; i++) {
+                                temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
+                        }
+                        i2c_dev->msg_buf += 4;
+                        i2c_dev->msg_buf_remaining -= 4;
+                } else if (i2c_dev->msg_buf_remaining > 0) {
+                        for(u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
+                                temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
+                        }
+                        i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
+                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
                 }
-                i2c_dev->msg_buf += 4;
-                i2c_dev->msg_buf_remaining -= 4;
-        } else if (i2c_dev->msg_buf_remaining > 0) {
-                for(u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
-                        temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
-                }
-                i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
-                i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
+                
+                bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_WDATA, temp);
+
+                dev_dbg(i2c_dev->dev, "data written: 0x%x\n", temp);
+
+                val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
+                tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
         }
-        
-        bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_WDATA, temp);
-
-        dev_dbg(i2c_dev->dev, "data written: 0x%x\n", temp);
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
-        tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 
         dev_dbg(i2c_dev->dev, "%u tx fifos free", tx_fifo_free);
 
@@ -262,30 +280,32 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
 
         rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
 
-        dev_dbg(i2c_dev->dev, "%u rx fifos free", rx_fifo_free);
+        while (rx_fifo_free > 0) {
+                dev_dbg(i2c_dev->dev, "%u rx fifos free", rx_fifo_free);
 
-        temp = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_RDATA);
-        if (i2c_dev->msg_buf_remaining >= 4) {
-                i2c_dev->msg_buf[0] = (temp >>  0) & 0xff;
-                i2c_dev->msg_buf[1] = (temp >>  8) & 0xff;
-                i2c_dev->msg_buf[2] = (temp >> 16) & 0xff;
-                i2c_dev->msg_buf[3] = (temp >> 24) & 0xff;
+                temp = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_RDATA);
+                if (i2c_dev->msg_buf_remaining >= 4) {
+                        i2c_dev->msg_buf[0] = (temp >>  0) & 0xff;
+                        i2c_dev->msg_buf[1] = (temp >>  8) & 0xff;
+                        i2c_dev->msg_buf[2] = (temp >> 16) & 0xff;
+                        i2c_dev->msg_buf[3] = (temp >> 24) & 0xff;
 
-                i2c_dev->msg_buf += 4;
-                i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
-        } else if (i2c_dev->msg_buf_remaining > 0) {
-                for (u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
-                        i2c_dev->msg_buf[i] = (u8)(temp >> (i * 8)) & 0xff;
+                        i2c_dev->msg_buf += 4;
+                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
+                } else if (i2c_dev->msg_buf_remaining > 0) {
+                        for (u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
+                                i2c_dev->msg_buf[i] = (u8)(temp >> (i * 8)) & 0xff;
+                        }
+
+                        i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
+                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
                 }
 
-                i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
-                i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
+                dev_dbg(i2c_dev->dev, "data read: 0x%x\n", temp);
+
+                val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
+                rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
         }
-
-        dev_dbg(i2c_dev->dev, "data read: 0x%x\n", temp);
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
-        rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
 
         dev_dbg(i2c_dev->dev, "%u rx fifos free", rx_fifo_free);
 }
@@ -366,84 +386,62 @@ static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev){
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
         u32 val;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val |= (BL808_I2C_STS_END_EN |
+        val |= (interrupts & (BL808_I2C_STS_END_EN |
                 BL808_I2C_STS_TXF_EN |
                 BL808_I2C_STS_RXF_EN |
                 BL808_I2C_STS_NAK_EN |
                 BL808_I2C_STS_ARB_EN |
-                BL808_I2C_STS_FER_EN);
+                BL808_I2C_STS_FER_EN));
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_unmask_interrupts(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_unmask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
         u32 val;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val &= ~(BL808_I2C_STS_END_MASK |
+        val &= ~(interrupts & (BL808_I2C_STS_END_MASK |
                 BL808_I2C_STS_TXF_MASK |
                 BL808_I2C_STS_RXF_MASK |
                 BL808_I2C_STS_NAK_MASK |
                 BL808_I2C_STS_ARB_MASK |
-                BL808_I2C_STS_FER_MASK);
+                BL808_I2C_STS_FER_MASK));
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
         u32 val;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val &= ~(BL808_I2C_STS_END_EN |
+        val &= ~(interrupts & (BL808_I2C_STS_END_EN |
                 BL808_I2C_STS_TXF_EN |
                 BL808_I2C_STS_RXF_EN |
                 BL808_I2C_STS_NAK_EN |
                 BL808_I2C_STS_ARB_EN |
-                BL808_I2C_STS_FER_EN);
+                BL808_I2C_STS_FER_EN));
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_disable_fifo_interrupts(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_mask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
         u32 val;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val &= ~(BL808_I2C_STS_TXF_EN |
-                 BL808_I2C_STS_RXF_EN);
-
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_mask_interrupts(struct bl808_i2c_dev *i2c_dev) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
-        val |= (BL808_I2C_STS_END_MASK |
+        val |= (interrupts & (BL808_I2C_STS_END_MASK |
                 BL808_I2C_STS_TXF_MASK |
                 BL808_I2C_STS_RXF_MASK |
                 BL808_I2C_STS_NAK_MASK |
                 BL808_I2C_STS_ARB_MASK |
-                BL808_I2C_STS_FER_MASK);
-
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_mask_fifo_interrupts(struct bl808_i2c_dev *i2c_dev) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
-        val |= (BL808_I2C_STS_TXF_MASK |
-                BL808_I2C_STS_RXF_MASK);
+                BL808_I2C_STS_FER_MASK));
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -475,17 +473,19 @@ static void bl808_i2c_init(struct bl808_i2c_dev *i2c_dev) {
 
         bl808_i2c_disable(i2c_dev);
 
-        bl808_i2c_mask_interrupts(i2c_dev);
+        bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
 
-        bl808_i2c_disable_interrupts(i2c_dev);
+        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
 }
 
 static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
 
         struct i2c_msg *msg = i2c_dev->curr_msg;
+        struct i2c_msg *nxt_msg;
         bool is_ten_bit = (msg->flags & I2C_M_TEN);
         u16 subaddr = 0;
         u16 subaddr_size = 0;
+        bool combined_message = false;
 
         if (!i2c_dev->num_msgs)
 		return -EINVAL;
@@ -494,27 +494,32 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
 	i2c_dev->msg_buf = msg->buf;
 	i2c_dev->msg_buf_remaining = msg->len;
 
-
         dev_dbg(i2c_dev->dev, "msg->len: %u, i2c_dev->msg_buf_remaining: %u\n", msg->len, i2c_dev->msg_buf_remaining);
 
         /* linux handles sub address via data bytes */
-        /* if (msg->flags) {
-                subaddr = 0;
-                for(u8 i = 0; i < msg->len; i++) {
-                        subaddr += msg->buf[i] << (i * 8);
+        if (i2c_dev->num_msgs > 0) {
+                nxt_msg = i2c_dev->curr_msg + 1;
+                combined_message = (msg->len <= 4) && !(msg->flags & I2C_M_RD) && (nxt_msg->flags & I2C_M_RD) && (msg->addr == nxt_msg->addr);
+                dev_dbg(i2c_dev->dev, "combined message? curr addr: 0x%x rd: %u len: %u nxt addr: 0x%x rd:%u \n", msg->addr, (msg->flags & I2C_M_RD), msg->len, nxt_msg->addr, (nxt_msg->flags & I2C_M_RD));
+                if (combined_message) {
+                        dev_dbg(i2c_dev->dev, "combined message! addr len: %u \n", msg->len);
+                        subaddr = 0;
+                        for(u8 i = 0; i < msg->len; i++) {
+                                subaddr += msg->buf[i] << (i * 8);
+                        }
+                        
+                        subaddr_size = msg->len;
+                        i2c_dev->curr_msg++;
+                        msg = i2c_dev->curr_msg;
+                        i2c_dev->num_msgs--;
+                        i2c_dev->msg_buf = msg->buf;
+                        i2c_dev->msg_buf_remaining = msg->len;
+                } else {
+                        subaddr = 0;
+                        subaddr_size = 0;
                 }
-                subaddr_size = msg->len;
-                bl808_i2c_addr_config(i2c_dev, msg->addr, subaddr, subaddr_size, is_ten_bit);
-                i2c_dev->curr_msg++;
-                msg = i2c_dev->curr_msg;
-        } else {
-                subaddr = 0;
-                subaddr_size = 0;
-                bl808_i2c_addr_config(i2c_dev, msg->addr, subaddr, subaddr_size, is_ten_bit);
-        } */
+        }
 
-        subaddr = 0;
-        subaddr_size = 0;
         bl808_i2c_addr_config(i2c_dev, msg->addr, subaddr, subaddr_size, is_ten_bit);
 
 
@@ -527,12 +532,15 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
 	
         if (msg->flags & I2C_M_RD) {
                 bl808_i2c_set_dir(i2c_dev, true);
+                bl808_i2c_unmask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK & ~BL808_I2C_STS_TXF_MASK);
+                bl808_i2c_enable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN & ~BL808_I2C_STS_TXF_EN);
         } else {
                 bl808_i2c_set_dir(i2c_dev, false);
+                bl808_i2c_unmask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK & ~BL808_I2C_STS_RXF_MASK);
+                bl808_i2c_enable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN & ~BL808_I2C_STS_RXF_EN);
         }
 
-        bl808_i2c_unmask_interrupts(i2c_dev);
-        bl808_i2c_enable_interrupts(i2c_dev);
+        
         bl808_i2c_enable(i2c_dev);
 
         return 0;
@@ -616,8 +624,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
         } else if (val & BL808_I2C_STS_TXF_INT) {
                 if(!i2c_dev->msg_buf_remaining) {
                         dev_dbg(i2c_dev->dev, "tx fifo free but nothing to tx anymore, masking\n");
-                        bl808_i2c_mask_fifo_interrupts(i2c_dev);
-                        bl808_i2c_disable_fifo_interrupts(i2c_dev);
+                        bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_TXF_MASK);
+                        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_EN);
                         return IRQ_HANDLED;
                 }
 
@@ -643,8 +651,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 complete:
         bl808_i2c_disable(i2c_dev);
         bl808_i2c_clear_interrupts(i2c_dev);
-        bl808_i2c_mask_interrupts(i2c_dev);
-        bl808_i2c_disable_interrupts(i2c_dev);
+        bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
+        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
         complete(&i2c_dev->completion);
 
         return IRQ_HANDLED;
@@ -674,8 +682,8 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
         if (time_left == 0) {
                 bl808_i2c_disable(i2c_dev);
                 bl808_i2c_clear_interrupts(i2c_dev);
-                bl808_i2c_mask_interrupts(i2c_dev);
-                bl808_i2c_disable_interrupts(i2c_dev);
+                bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
+                bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
                 /* maybe reset bus here? */
                 dev_err(i2c_dev->dev, "i2c transfer timed out\n");
 		return -ETIMEDOUT;

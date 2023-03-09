@@ -20,6 +20,8 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
+#define BL808_TEMP_PARENT_CLK   160000000u
+
 #define BL808_I2C_CONFIG        0x0
 #define BL808_I2C_STS           0x4
 /* sub addr fields 0-3 */
@@ -219,9 +221,8 @@ struct clk_bl808_i2c {
 static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate) {
         u32 divider;
         
-        u32 actual_parent_rate = 160000000u;
          /* TODO: use parent rate */
-        divider = ((actual_parent_rate/4)/rate) -1;
+        divider = ((BL808_TEMP_PARENT_CLK/4)/rate) -1;
 
         return divider;
 }
@@ -256,8 +257,28 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
         return 0;
 }
 
+static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate, unsigned long *parent_rate) {
+	u32 divider = clk_bl808_i2c_calc_divider(rate, *parent_rate);
+
+	return BL808_TEMP_PARENT_CLK/((divider + 1) * 4);
+}
+
+static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long parent_rate) {
+        u32 val;
+        u32 divider;
+	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
+
+        val = bl808_i2c_readl(div->i2c_dev, BL808_I2C_PRD_START);
+
+        divider = val & 0xff;
+
+	return BL808_TEMP_PARENT_CLK/((divider + 1) * 4);
+}
+
 static const struct clk_ops clk_bl808_i2c_ops = {
 	.set_rate = clk_bl808_i2c_set_rate,
+        .round_rate = clk_bl808_i2c_round_rate,
+        .recalc_rate = clk_bl808_i2c_recalc_rate,
 };
 
 static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, struct bl808_i2c_dev *i2c_dev)

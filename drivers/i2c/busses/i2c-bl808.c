@@ -210,27 +210,82 @@ static inline u32 bl808_i2c_readl(struct bl808_i2c_dev *i2c_dev, u32 reg)
 	return readl(i2c_dev->regs + reg);
 }
 
-static inline void clk_bl808_i2c_set_rate(struct bl808_i2c_dev *i2c_dev, u32 freq) {
+#define to_clk_bl808_i2c(_hw) container_of(_hw, struct clk_bl808_i2c, hw)
+struct clk_bl808_i2c {
+	struct clk_hw hw;
+	struct bl808_i2c_dev *i2c_dev;
+};
+
+static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate) {
+        u32 divider;
+        
+        u32 actual_parent_rate = 160000000u;
+         /* TODO: use parent rate */
+        divider = ((actual_parent_rate/4)/rate) -1;
+
+        return divider;
+}
+
+static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigned long parent_rate) {
+        struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
         u32 val;
         u32 divider;
-        u32 magic;
 
-        magic = 10000000u;
-        divider = (magic/freq) -1;
+        divider = clk_bl808_i2c_calc_divider(rate, parent_rate);
 
-        if(divider > 255) {
-                divider = 0xff;
+        if(divider == 0) {
+                return -EINVAL;
         }
 
-        /* use max divider regardless */
-        val =  (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_0_SHIFT;
-        val |= (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_1_SHIFT;
-        val |= (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_2_SHIFT;
-        val |= (/*divider &*/ 0xff) << BL808_I2C_PRD_S_PH_3_SHIFT;
+        if(divider > 0xff) {
+                divider = 0xff;
+                dev_warn(div->i2c_dev->dev, "requested rate %lu is slower than minmum, setting to slowest possible rate\n", rate);
+        }
 
-        bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_START, val);
-        bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_DATA, val);
-        bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_STOP, val);
+        dev_dbg(div->i2c_dev->dev, "requested rate: %lu, parent rate: %lu, divider 0x%x\n", rate, parent_rate, divider);
+
+        val =  (divider & 0xff) << BL808_I2C_PRD_S_PH_0_SHIFT;
+        val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_1_SHIFT;
+        val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_2_SHIFT;
+        val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_3_SHIFT;
+
+        bl808_i2c_writel(div->i2c_dev, BL808_I2C_PRD_START, val);
+        bl808_i2c_writel(div->i2c_dev, BL808_I2C_PRD_DATA, val);
+        bl808_i2c_writel(div->i2c_dev, BL808_I2C_PRD_STOP, val);
+
+        return 0;
+}
+
+static const struct clk_ops clk_bl808_i2c_ops = {
+	.set_rate = clk_bl808_i2c_set_rate,
+};
+
+static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, struct bl808_i2c_dev *i2c_dev)
+{
+	struct clk_init_data init;
+	struct clk_bl808_i2c *priv;
+	char name[32];
+	const char *mclk_name;
+
+	snprintf(name, sizeof(name), "%s_div", dev_name(dev));
+
+	mclk_name = __clk_get_name(mclk);
+
+	init.ops = &clk_bl808_i2c_ops;
+	init.name = name;
+	init.parent_names = (const char* []) { mclk_name };
+	init.num_parents = 1;
+	init.flags = 0;
+
+	priv = devm_kzalloc(dev, sizeof(struct clk_bl808_i2c), GFP_KERNEL);
+	if (priv == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	priv->hw.init = &init;
+	priv->i2c_dev = i2c_dev;
+
+	clk_hw_register_clkdev(&priv->hw, "div", dev_name(dev));
+	return devm_clk_register(dev, &priv->hw);
 }
 
 static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
@@ -714,6 +769,13 @@ static int bl808_i2c_probe(struct platform_device *pdev){
                 return dev_err_probe(&pdev->dev, PTR_ERR(mclk),
                                      "Could not get clock\n");
 
+        i2c_dev->bus_clk = bl808_i2c_register_div(&pdev->dev, mclk, i2c_dev);
+
+        if (IS_ERR(i2c_dev->bus_clk)) {
+		dev_err(&pdev->dev, "Could not register clock\n");
+		return PTR_ERR(i2c_dev->bus_clk);
+	}
+
         ret = of_property_read_u32(pdev->dev.of_node, "clock-frequency",
                                    &bus_clk_rate);
         if (ret < 0) {
@@ -733,8 +795,6 @@ static int bl808_i2c_probe(struct platform_device *pdev){
                 dev_err(&pdev->dev, "Couldn't prepare clock");
                 goto err_put_exclusive_rate;
         }
-
-        clk_bl808_i2c_set_rate(i2c_dev, bus_clk_rate);
 
         i2c_dev->irq = platform_get_irq(pdev, 0);
         if (i2c_dev->irq < 0) {

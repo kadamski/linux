@@ -243,7 +243,6 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
         tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 
         while (tx_fifo_free > 0) {
-                dev_dbg(i2c_dev->dev, "%u tx fifos free", tx_fifo_free);
 
                 if (i2c_dev->msg_buf_remaining >= 4) {
                         for(u8 i = 0; i < 4; i++) {
@@ -261,14 +260,9 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
                 
                 bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_WDATA, temp);
 
-                dev_dbg(i2c_dev->dev, "data written: 0x%x\n", temp);
-
                 val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
                 tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
         }
-
-        dev_dbg(i2c_dev->dev, "%u tx fifos free", tx_fifo_free);
-
 }
 
 static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
@@ -281,8 +275,6 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
         rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
 
         while (rx_fifo_free > 0) {
-                dev_dbg(i2c_dev->dev, "%u rx fifos free", rx_fifo_free);
-
                 temp = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_RDATA);
                 if (i2c_dev->msg_buf_remaining >= 4) {
                         i2c_dev->msg_buf[0] = (temp >>  0) & 0xff;
@@ -301,13 +293,9 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
                         i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
                 }
 
-                dev_dbg(i2c_dev->dev, "data read: 0x%x\n", temp);
-
                 val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
                 rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
         }
-
-        dev_dbg(i2c_dev->dev, "%u rx fifos free", rx_fifo_free);
 }
 
 static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr, u16 sub_addr, u8 sub_addr_size, bool is_addr_10bit) {
@@ -354,9 +342,6 @@ static void bl808_i2c_set_datalen(struct bl808_i2c_dev *i2c_dev, u16 data_len) {
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
         val &= ~BL808_I2C_CONFIG_PKT_LEN_MASK;
         val |= ((data_len - 1) << BL808_I2C_CONFIG_PKT_LEN_SHIFT) & BL808_I2C_CONFIG_PKT_LEN_MASK;
-
-        dev_dbg(i2c_dev->dev, "data len val: 0x%x\n", val);
-
         bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
@@ -494,15 +479,11 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
 	i2c_dev->msg_buf = msg->buf;
 	i2c_dev->msg_buf_remaining = msg->len;
 
-        dev_dbg(i2c_dev->dev, "msg->len: %u, i2c_dev->msg_buf_remaining: %u\n", msg->len, i2c_dev->msg_buf_remaining);
-
         /* linux handles sub address via data bytes */
         if (i2c_dev->num_msgs > 0) {
                 nxt_msg = i2c_dev->curr_msg + 1;
                 combined_message = (msg->len <= 4) && !(msg->flags & I2C_M_RD) && (nxt_msg->flags & I2C_M_RD) && (msg->addr == nxt_msg->addr);
-                dev_dbg(i2c_dev->dev, "combined message? curr addr: 0x%x rd: %u len: %u nxt addr: 0x%x rd:%u \n", msg->addr, (msg->flags & I2C_M_RD), msg->len, nxt_msg->addr, (nxt_msg->flags & I2C_M_RD));
                 if (combined_message) {
-                        dev_dbg(i2c_dev->dev, "combined message! addr len: %u \n", msg->len);
                         subaddr = 0;
                         for(u8 i = 0; i < msg->len; i++) {
                                 subaddr += msg->buf[i] << (i * 8);
@@ -567,6 +548,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
         }
 
         if (val & BL808_I2C_STS_ARB_INT) {
+                dev_dbg(i2c_dev->dev, "Arbitration lost\n");
                 i2c_dev->msg_err = -EAGAIN;
                 goto complete;
         } else if (val & BL808_I2C_STS_NAK_INT) {
@@ -595,7 +577,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                 }
 
                 if (i2c_dev->msg_buf_remaining){
-                        dev_dbg(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
+                        dev_err(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
 			i2c_dev->msg_err = -EREMOTEIO;
                 } else{
 			i2c_dev->msg_err = 0;
@@ -604,7 +586,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                 goto complete;
         } else if (val & BL808_I2C_STS_RXF_INT) {
                 if(!i2c_dev->msg_buf_remaining) {
-                        dev_dbg(i2c_dev->dev, "wants receive data to be popped, but no where to put\n");
+                        dev_err(i2c_dev->dev, "wants receive data to be popped, but no where to put\n");
                         i2c_dev->msg_err = -EREMOTEIO;
                         goto complete;
                 }
@@ -694,7 +676,6 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
         }
 
         dev_dbg(i2c_dev->dev, "i2c transfer failed: 0x%x | %d\n", i2c_dev->msg_err, i2c_dev->msg_err);
-
 	return i2c_dev->msg_err;
 }
 

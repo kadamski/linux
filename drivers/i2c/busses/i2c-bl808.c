@@ -20,8 +20,6 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
-#define BL808_TEMP_PARENT_CLK   160000000u
-
 #define BL808_I2C_CONFIG        0x0
 #define BL808_I2C_STS           0x4
 /* sub addr fields 0-3 */
@@ -222,7 +220,7 @@ static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_r
         u32 divider;
         
          /* TODO: use parent rate */
-        divider = ((BL808_TEMP_PARENT_CLK/4)/rate) -1;
+        divider = ((parent_rate/4)/rate) -1;
 
         return divider;
 }

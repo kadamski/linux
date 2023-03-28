@@ -218,8 +218,7 @@ struct clk_bl808_i2c {
 
 static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate) {
         u32 divider;
-        
-         /* TODO: use parent rate */
+
         divider = ((parent_rate/4)/rate) -1;
 
         return divider;
@@ -258,7 +257,7 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
 static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate, unsigned long *parent_rate) {
 	u32 divider = clk_bl808_i2c_calc_divider(rate, *parent_rate);
 
-	return BL808_TEMP_PARENT_CLK/((divider + 1) * 4);
+	return *parent_rate/((divider + 1) * 4);
 }
 
 static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long parent_rate) {
@@ -270,7 +269,7 @@ static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long 
 
         divider = val & 0xff;
 
-	return BL808_TEMP_PARENT_CLK/((divider + 1) * 4);
+	return parent_rate/((divider + 1) * 4);
 }
 
 static const struct clk_ops clk_bl808_i2c_ops = {
@@ -546,6 +545,8 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
         u16 subaddr_size = 0;
         bool combined_message = false;
 
+        bl808_i2c_init(i2c_dev);
+
         if (!i2c_dev->num_msgs)
 		return -EINVAL;
 
@@ -678,14 +679,16 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
                 return IRQ_HANDLED;
         } else if (val & BL808_I2C_STS_TXF_INT) {
-                if(!i2c_dev->msg_buf_remaining) {
+                if(!i2c_dev->msg_buf_remaining && !i2c_dev->num_msgs) {
                         dev_dbg(i2c_dev->dev, "tx fifo free but nothing to tx anymore, masking\n");
                         bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_TXF_MASK);
                         bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_EN);
                         return IRQ_HANDLED;
                 }
 
-                bl808_fill_tx_fifo(i2c_dev);
+                if(i2c_dev->msg_buf_remaining) {
+                        bl808_fill_tx_fifo(i2c_dev);
+                }
 
                 if (i2c_dev->num_msgs && !i2c_dev->msg_buf_remaining) {
                         i2c_dev->curr_msg++;

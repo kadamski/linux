@@ -317,6 +317,8 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
 
         while (tx_fifo_free > 0) {
 
+                temp = 0;
+
                 if (i2c_dev->msg_buf_remaining >= 4) {
                         for(u8 i = 0; i < 4; i++) {
                                 temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);

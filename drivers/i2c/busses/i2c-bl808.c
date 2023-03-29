@@ -314,7 +314,7 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
 
         tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 
-        while (tx_fifo_free > 0) {
+        while (tx_fifo_free > 0 && i2c_dev->msg_buf_remaining > 0) {
                 u16 bytes_to_fill = min_t(u16, i2c_dev->msg_buf_remaining, 4);
                 u32 temp = 0;
 

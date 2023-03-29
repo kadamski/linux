@@ -417,23 +417,30 @@ static void bl808_i2c_enable(struct bl808_i2c_dev *i2c_dev){
         bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
+static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev) {
+        u32 val = BL808_I2C_STS_END_CLR |
+                  BL808_I2C_STS_NAK_CLR |
+                  BL808_I2C_STS_ARB_CLR;
+
+        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
+}
+
+static void bl808_i2c_clear_fifo_err(struct bl808_i2c_dev *i2c_dev) {
+        u32 val = (BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR |
+                   BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR);
+
+        bl808_i2c_writel(i2c_dev,  BL808_I2C_FIFO_CONFIG_0, val);
+}
+
 static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev){
         u32 val;
         /* disable i2c */
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
         val &= ~BL808_I2C_CONFIG_M_EN;
         bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
-        /* Clear I2C fifo */
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
-        val |= BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR;
-        val |= BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR;
-        bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_CONFIG_0, val);
-        /* Clear I2C interrupt status */
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-        val |= BL808_I2C_STS_END_CLR;
-        val |= BL808_I2C_STS_NAK_CLR;
-        val |= BL808_I2C_STS_ARB_CLR;
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
+
+        bl808_i2c_clear_fifo_err(i2c_dev);
+        bl808_i2c_clear_interrupts(i2c_dev);
 }
 
 static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
@@ -494,29 +501,6 @@ static void bl808_i2c_mask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interru
                 BL808_I2C_STS_FER_MASK));
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
-        val |= (BL808_I2C_STS_END_CLR |
-                BL808_I2C_STS_NAK_CLR |
-                BL808_I2C_STS_ARB_CLR);
-
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_clear_fifo_err(struct bl808_i2c_dev *i2c_dev) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
-
-        val |= (BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR |
-                BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR);
-
-        bl808_i2c_writel(i2c_dev,  BL808_I2C_FIFO_CONFIG_0, val);
 }
 
 static void bl808_i2c_init(struct bl808_i2c_dev *i2c_dev) {

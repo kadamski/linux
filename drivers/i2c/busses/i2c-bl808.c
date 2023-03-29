@@ -308,7 +308,6 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, 
 
 static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
         u32 val;
-        u32 temp = 0;
         u32 tx_fifo_free;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
@@ -316,23 +315,14 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
         tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 
         while (tx_fifo_free > 0) {
+                u16 bytes_to_fill = min_t(u16, i2c_dev->msg_buf_remaining, 4);
+                u32 temp = 0;
 
-                temp = 0;
+                for (u8 i = 0; i < bytes_to_fill; i++)
+                        temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
+                i2c_dev->msg_buf += bytes_to_fill;
+                i2c_dev->msg_buf_remaining -= bytes_to_fill;
 
-                if (i2c_dev->msg_buf_remaining >= 4) {
-                        for(u8 i = 0; i < 4; i++) {
-                                temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
-                        }
-                        i2c_dev->msg_buf += 4;
-                        i2c_dev->msg_buf_remaining -= 4;
-                } else if (i2c_dev->msg_buf_remaining > 0) {
-                        for(u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
-                                temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
-                        }
-                        i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
-                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
-                }
-                
                 bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_WDATA, temp);
 
                 val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);

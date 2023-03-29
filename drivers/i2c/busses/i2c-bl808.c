@@ -569,12 +569,6 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
         }
 
         bl808_i2c_addr_config(i2c_dev, msg->addr, subaddr, subaddr_size, is_ten_bit);
-
-
-        if (msg->len > 256) {
-                return -EINVAL;
-        }
-
         bl808_i2c_set_datalen(i2c_dev, msg->len);
 
 	
@@ -865,8 +859,13 @@ static int bl808_i2c_remove(struct platform_device *pdev)
         return 0;
 }
 
+static const struct i2c_adapter_quirks bl808_quirks = {
+	.max_read_len = 256,
+	.max_write_len = 256,
+};
+
 static const struct of_device_id bl808_i2c_of_match[] = {
-        { .compatible = "bflb,bl808-i2c" },
+        { .compatible = "bflb,bl808-i2c", .data = &bl808_quirks },
         {},
 };
 MODULE_DEVICE_TABLE(of, bl808_i2c_of_match);

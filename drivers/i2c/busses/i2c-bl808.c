@@ -5,6 +5,7 @@
  * Based on i2c-altera.c
 */
 
+#include <linux/bitops.h>
 #include <linux/clk.h>
 #include <linux/clkdev.h>
 #include <linux/clk-provider.h>
@@ -586,6 +587,10 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
         int ret;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
+
+        if(hweight32(val) != 0) {
+                dev_err(i2c_dev->dev, "Multiple interrupts %u\n", val);
+        }
 
         if (!i2c_dev->curr_msg) {
                 dev_err(i2c_dev->dev, "Unexpected interrupt (no running transfer)\n");

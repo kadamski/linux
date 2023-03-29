@@ -308,31 +308,21 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, 
 
 static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
         u32 val;
-        u32 temp = 0;
         u32 tx_fifo_free;
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
 
         tx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 
-        while (tx_fifo_free > 0) {
+        while (tx_fifo_free > 0 && i2c_dev->msg_buf_remaining > 0) {
+                u16 bytes_to_fill = min_t(u16, i2c_dev->msg_buf_remaining, 4);
+                u32 temp = 0;
 
-                temp = 0;
+                for (u8 i = 0; i < bytes_to_fill; i++)
+                        temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
+                i2c_dev->msg_buf += bytes_to_fill;
+                i2c_dev->msg_buf_remaining -= bytes_to_fill;
 
-                if (i2c_dev->msg_buf_remaining >= 4) {
-                        for(u8 i = 0; i < 4; i++) {
-                                temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
-                        }
-                        i2c_dev->msg_buf += 4;
-                        i2c_dev->msg_buf_remaining -= 4;
-                } else if (i2c_dev->msg_buf_remaining > 0) {
-                        for(u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
-                                temp += i2c_dev->msg_buf[i] << ((i % 4) * 8);
-                        }
-                        i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
-                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
-                }
-                
                 bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_WDATA, temp);
 
                 val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
@@ -427,23 +417,30 @@ static void bl808_i2c_enable(struct bl808_i2c_dev *i2c_dev){
         bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
+static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev) {
+        u32 val = BL808_I2C_STS_END_CLR |
+                  BL808_I2C_STS_NAK_CLR |
+                  BL808_I2C_STS_ARB_CLR;
+
+        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
+}
+
+static void bl808_i2c_clear_fifo_err(struct bl808_i2c_dev *i2c_dev) {
+        u32 val = (BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR |
+                   BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR);
+
+        bl808_i2c_writel(i2c_dev,  BL808_I2C_FIFO_CONFIG_0, val);
+}
+
 static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev){
         u32 val;
         /* disable i2c */
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
         val &= ~BL808_I2C_CONFIG_M_EN;
         bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
-        /* Clear I2C fifo */
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
-        val |= BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR;
-        val |= BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR;
-        bl808_i2c_writel(i2c_dev, BL808_I2C_FIFO_CONFIG_0, val);
-        /* Clear I2C interrupt status */
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-        val |= BL808_I2C_STS_END_CLR;
-        val |= BL808_I2C_STS_NAK_CLR;
-        val |= BL808_I2C_STS_ARB_CLR;
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
+
+        bl808_i2c_clear_fifo_err(i2c_dev);
+        bl808_i2c_clear_interrupts(i2c_dev);
 }
 
 static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
@@ -506,29 +503,6 @@ static void bl808_i2c_mask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interru
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
-        val |= (BL808_I2C_STS_END_CLR |
-                BL808_I2C_STS_NAK_CLR |
-                BL808_I2C_STS_ARB_CLR);
-
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_clear_fifo_err(struct bl808_i2c_dev *i2c_dev) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
-
-        val |= (BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR |
-                BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR);
-
-        bl808_i2c_writel(i2c_dev,  BL808_I2C_FIFO_CONFIG_0, val);
-}
-
 static void bl808_i2c_init(struct bl808_i2c_dev *i2c_dev) {
 
         bl808_i2c_disable(i2c_dev);
@@ -579,12 +553,6 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
         }
 
         bl808_i2c_addr_config(i2c_dev, msg->addr, subaddr, subaddr_size, is_ten_bit);
-
-
-        if (msg->len > 256) {
-                return -EINVAL;
-        }
-
         bl808_i2c_set_datalen(i2c_dev, msg->len);
 
 	
@@ -875,8 +843,13 @@ static int bl808_i2c_remove(struct platform_device *pdev)
         return 0;
 }
 
+static const struct i2c_adapter_quirks bl808_quirks = {
+	.max_read_len = 256,
+	.max_write_len = 256,
+};
+
 static const struct of_device_id bl808_i2c_of_match[] = {
-        { .compatible = "bflb,bl808-i2c" },
+        { .compatible = "bflb,bl808-i2c", .data = &bl808_quirks },
         {},
 };
 MODULE_DEVICE_TABLE(of, bl808_i2c_of_match);

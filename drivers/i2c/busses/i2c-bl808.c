@@ -706,7 +706,7 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
         i2c_dev->msg_err = 0;
         ret = bl808_i2c_start_transfer(i2c_dev);
         if (ret) {
-                return i2c_dev->msg_err;
+                return ret;
         }
 
         time_left = wait_for_completion_timeout(&i2c_dev->completion,

@@ -195,7 +195,7 @@ struct bl808_i2c_dev {
         struct i2c_msg *curr_msg;
         struct clk *bus_clk;
         int num_msgs;
-        u32 msg_err;
+        int msg_err;
         u8 *msg_buf;
         u16 msg_buf_remaining;
 };
@@ -588,8 +588,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        if(hweight32(val & 0x3f) != 0) {
-                dev_err(i2c_dev->dev, "Multiple interrupts %u\n", val & 0x3f);
+        if(hweight32(val & 0x3f) > 1) {
+                dev_err(i2c_dev->dev, "Multiple interrupts %u, sts=0x%x\n", val & 0x3f, val);
         }
 
         if (!i2c_dev->curr_msg) {
@@ -606,15 +606,20 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                 i2c_dev->msg_err = -ENXIO;
                 goto complete;
         } else if (val & BL808_I2C_STS_FER_INT) {
-                val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
-                if (val & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_OVFLW) {
-                        dev_err(i2c_dev->dev, "RX FIFO Overflow\n");
-                } else if (val & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_UDFLW) {
-                        dev_err(i2c_dev->dev, "RX FIFO Underflow\n");
-                } else if (val & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_OVFLW) {
-                        dev_err(i2c_dev->dev, "TX FIFO Overflow\n");
-                } else if (val & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_UDFLW) {
-                        dev_err(i2c_dev->dev, "TX FIFO Underflow\n");
+                u32 config_0, config_1, tx_cnt, rx_cnt;
+                config_0 = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
+                config_1 = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
+                tx_cnt = (config_1 & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
+                rx_cnt = (config_1 & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
+
+                if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_OVFLW) {
+                        dev_err(i2c_dev->dev, "RX FIFO Overflow, cnt=%d\n", rx_cnt);
+                } else if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_UDFLW) {
+                        dev_err(i2c_dev->dev, "RX FIFO Underflow, cnt=%d\n", rx_cnt);
+                } else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_OVFLW) {
+                        dev_err(i2c_dev->dev, "TX FIFO Overflow, cnt=%d\n", tx_cnt);
+                } else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_UDFLW) {
+                        dev_err(i2c_dev->dev, "TX FIFO Underflow, cnt=%d\n", tx_cnt);
                 }
 
                 i2c_dev->msg_err = -EIO;
@@ -703,9 +708,10 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 	i2c_dev->num_msgs = num;
 	reinit_completion(&i2c_dev->completion);
         
+        i2c_dev->msg_err = 0;
         ret = bl808_i2c_start_transfer(i2c_dev);
         if (ret) {
-                return i2c_dev->msg_err;
+                return ret;
         }
 
         time_left = wait_for_completion_timeout(&i2c_dev->completion,
@@ -799,7 +805,7 @@ static int bl808_i2c_probe(struct platform_device *pdev){
                 goto err_disable_unprepare_clk;
         }
 
-        ret = request_irq(i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
+        ret = devm_request_irq(&pdev->dev, i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
                           dev_name(&pdev->dev), i2c_dev);
         if (ret) {
                 dev_err(&pdev->dev, "Could not request IRQ\n");
@@ -819,14 +825,12 @@ static int bl808_i2c_probe(struct platform_device *pdev){
 
         ret = i2c_add_adapter(adap);
         if (ret)
-                goto err_free_irq;
+                goto err_disable_unprepare_clk;
 
         bl808_i2c_init(i2c_dev);
 
         return 0;
 
-err_free_irq:
-        free_irq(i2c_dev->irq, i2c_dev);
 err_disable_unprepare_clk:
         clk_disable_unprepare(i2c_dev->bus_clk);
 err_put_exclusive_rate:
@@ -842,7 +846,6 @@ static int bl808_i2c_remove(struct platform_device *pdev)
         clk_rate_exclusive_put(i2c_dev->bus_clk);
         clk_disable_unprepare(i2c_dev->bus_clk);
 
-        free_irq(i2c_dev->irq, i2c_dev);
         i2c_del_adapter(&i2c_dev->adapter);
 
         return 0;

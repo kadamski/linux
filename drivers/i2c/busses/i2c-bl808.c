@@ -588,8 +588,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        if(hweight32(val & 0x3f) != 0) {
-                dev_err(i2c_dev->dev, "Multiple interrupts %u\n", val & 0x3f);
+        if(hweight32(val & 0x3f) > 1) {
+                dev_err(i2c_dev->dev, "Multiple interrupts %u, sts=0x%x\n", val & 0x3f, val);
         }
 
         if (!i2c_dev->curr_msg) {

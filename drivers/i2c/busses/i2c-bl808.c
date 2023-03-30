@@ -800,7 +800,7 @@ static int bl808_i2c_probe(struct platform_device *pdev){
                 goto err_disable_unprepare_clk;
         }
 
-        ret = request_irq(i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
+        ret = devm_request_irq(&pdev->dev, i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
                           dev_name(&pdev->dev), i2c_dev);
         if (ret) {
                 dev_err(&pdev->dev, "Could not request IRQ\n");
@@ -820,14 +820,12 @@ static int bl808_i2c_probe(struct platform_device *pdev){
 
         ret = i2c_add_adapter(adap);
         if (ret)
-                goto err_free_irq;
+                goto err_disable_unprepare_clk;
 
         bl808_i2c_init(i2c_dev);
 
         return 0;
 
-err_free_irq:
-        free_irq(i2c_dev->irq, i2c_dev);
 err_disable_unprepare_clk:
         clk_disable_unprepare(i2c_dev->bus_clk);
 err_put_exclusive_rate:
@@ -843,7 +841,6 @@ static int bl808_i2c_remove(struct platform_device *pdev)
         clk_rate_exclusive_put(i2c_dev->bus_clk);
         clk_disable_unprepare(i2c_dev->bus_clk);
 
-        free_irq(i2c_dev->irq, i2c_dev);
         i2c_del_adapter(&i2c_dev->adapter);
 
         return 0;

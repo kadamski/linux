@@ -606,15 +606,20 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                 i2c_dev->msg_err = -ENXIO;
                 goto complete;
         } else if (val & BL808_I2C_STS_FER_INT) {
-                val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
-                if (val & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_OVFLW) {
-                        dev_err(i2c_dev->dev, "RX FIFO Overflow\n");
-                } else if (val & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_UDFLW) {
-                        dev_err(i2c_dev->dev, "RX FIFO Underflow\n");
-                } else if (val & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_OVFLW) {
-                        dev_err(i2c_dev->dev, "TX FIFO Overflow\n");
-                } else if (val & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_UDFLW) {
-                        dev_err(i2c_dev->dev, "TX FIFO Underflow\n");
+                u32 config_0, config_1, tx_cnt, rx_cnt;
+                config_0 = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_0);
+                config_1 = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
+                tx_cnt = (config_1 & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
+                rx_cnt = (config_1 & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
+
+                if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_OVFLW) {
+                        dev_err(i2c_dev->dev, "RX FIFO Overflow, cnt=%d\n", rx_cnt);
+                } else if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_UDFLW) {
+                        dev_err(i2c_dev->dev, "RX FIFO Underflow, cnt=%d\n", rx_cnt);
+                } else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_OVFLW) {
+                        dev_err(i2c_dev->dev, "TX FIFO Overflow, cnt=%d\n", tx_cnt);
+                } else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_UDFLW) {
+                        dev_err(i2c_dev->dev, "TX FIFO Underflow, cnt=%d\n", tx_cnt);
                 }
 
                 i2c_dev->msg_err = -EIO;

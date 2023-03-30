@@ -195,7 +195,7 @@ struct bl808_i2c_dev {
         struct i2c_msg *curr_msg;
         struct clk *bus_clk;
         int num_msgs;
-        u32 msg_err;
+        int msg_err;
         u8 *msg_buf;
         u16 msg_buf_remaining;
 };

@@ -190,6 +190,9 @@ struct bl808_i2c_dev {
         struct device *dev;
         void __iomem *regs;
         int irq;
+        u32 isr_status;
+        u32 isr_mask;
+	struct mutex isr_mutex;
         struct i2c_adapter adapter;
         struct completion completion;
         struct i2c_msg *curr_msg;
@@ -448,12 +451,14 @@ static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inter
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val |= (interrupts & (BL808_I2C_STS_END_EN |
+        i2c_dev->isr_mask = (interrupts & (BL808_I2C_STS_END_EN |
                 BL808_I2C_STS_TXF_EN |
                 BL808_I2C_STS_RXF_EN |
                 BL808_I2C_STS_NAK_EN |
                 BL808_I2C_STS_ARB_EN |
                 BL808_I2C_STS_FER_EN));
+
+        val |= i2c_dev->isr_mask;
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -463,12 +468,14 @@ static void bl808_i2c_unmask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inter
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val &= ~(interrupts & (BL808_I2C_STS_END_MASK |
+        i2c_dev->isr_mask = ~(interrupts & (BL808_I2C_STS_END_MASK |
                 BL808_I2C_STS_TXF_MASK |
                 BL808_I2C_STS_RXF_MASK |
                 BL808_I2C_STS_NAK_MASK |
                 BL808_I2C_STS_ARB_MASK |
                 BL808_I2C_STS_FER_MASK));
+
+        val &= i2c_dev->isr_mask;
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -581,14 +588,26 @@ static void bl808_i2c_finish_transfer(struct bl808_i2c_dev *i2c_dev){
 	i2c_dev->msg_buf_remaining = 0;
 }
 
+static irqreturn_t bl808_i2c_isr_quick(int irq, void *data) {
+        struct bl808_i2c_dev *i2c_dev = data;
+        irqreturn_t ret = IRQ_HANDLED;
+
+        /* Read IRQ status but only interested in Enabled IRQs. */
+	i2c_dev->isr_status = bl808_i2c_readl(i2c_dev, BL808_I2C_STS) & i2c_dev->isr_mask;
+	if (i2c_dev->isr_status)
+		ret = IRQ_WAKE_THREAD;
+
+	return ret;
+}
+
 static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
         struct bl808_i2c_dev *i2c_dev = data;
-        u32 val;
+        u32 val= i2c_dev->isr_status;
         int ret;
 
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
         dev_dbg(i2c_dev->dev, "IRQ sts=0x%x, %d, %p\n", val, i2c_dev->num_msgs, i2c_dev->curr_msg);
+
+        mutex_lock(&i2c_dev->isr_mutex);
 
         if (!i2c_dev->curr_msg) {
                 dev_err(i2c_dev->dev, "Unexpected interrupt (no running transfer)\n");
@@ -655,12 +674,16 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                         }
                 }
 
+
+                mutex_unlock(&i2c_dev->isr_mutex);
+
                 return IRQ_HANDLED;
         } else if (val & BL808_I2C_STS_TXF_INT) {
                 if(!i2c_dev->msg_buf_remaining && !i2c_dev->num_msgs) {
                         dev_dbg(i2c_dev->dev, "tx fifo free but nothing to tx anymore, masking\n");
                         bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_TXF_MASK);
                         bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_EN);
+                        mutex_unlock(&i2c_dev->isr_mutex);
                         return IRQ_HANDLED;
                 }
                 if (!i2c_dev->msg_buf_remaining) {
@@ -670,16 +693,23 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                                 i2c_dev->msg_err = ret;
                                 goto complete;
                         }
+
+                        mutex_unlock(&i2c_dev->isr_mutex);
+
                         return IRQ_HANDLED;
                 }
 
                 bl808_fill_tx_fifo(i2c_dev);
+
+                mutex_unlock(&i2c_dev->isr_mutex);
 
                 return IRQ_HANDLED;
         }
 
         dev_warn(i2c_dev->dev, "Unexpected interrupt: 0x%x\n", val);
         bl808_i2c_clear_interrupts(i2c_dev);
+
+        mutex_unlock(&i2c_dev->isr_mutex);
 
         return IRQ_HANDLED;
 
@@ -689,6 +719,8 @@ complete:
         bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
         bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
         complete(&i2c_dev->completion);
+
+        mutex_unlock(&i2c_dev->isr_mutex);
 
         return IRQ_HANDLED;
 }
@@ -700,6 +732,7 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
         unsigned long time_left;
         int ret;
 
+        mutex_lock(&i2c_dev->isr_mutex);
         i2c_dev->curr_msg = msgs;
 	i2c_dev->num_msgs = num;
 	reinit_completion(&i2c_dev->completion);
@@ -707,12 +740,16 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
         i2c_dev->msg_err = 0;
         ret = bl808_i2c_start_transfer(i2c_dev);
         if (ret) {
+                mutex_unlock(&i2c_dev->isr_mutex);
                 return ret;
         }
+
+        mutex_unlock(&i2c_dev->isr_mutex);
 
         time_left = wait_for_completion_timeout(&i2c_dev->completion,
 						adap->timeout);
 
+        mutex_lock(&i2c_dev->isr_mutex);
 	bl808_i2c_finish_transfer(i2c_dev);
 
         if (time_left == 0) {
@@ -722,14 +759,17 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
                 bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
                 /* maybe reset bus here? */
                 dev_err(i2c_dev->dev, "i2c transfer timed out\n");
+                mutex_unlock(&i2c_dev->isr_mutex);
 		return -ETIMEDOUT;
         }
 
         if (!i2c_dev->msg_err){
+                mutex_unlock(&i2c_dev->isr_mutex);
                 return num;
         }
 
         dev_dbg(i2c_dev->dev, "i2c transfer failed: 0x%x | %d\n", i2c_dev->msg_err, i2c_dev->msg_err);
+        mutex_unlock(&i2c_dev->isr_mutex);
 	return i2c_dev->msg_err;
 }
 
@@ -757,6 +797,7 @@ static int bl808_i2c_probe(struct platform_device *pdev){
         platform_set_drvdata(pdev, i2c_dev);
         i2c_dev->dev = &pdev->dev;
         init_completion(&i2c_dev->completion);
+        mutex_init(&i2c_dev->isr_mutex);
 
         mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
         i2c_dev->regs = devm_ioremap_resource(&pdev->dev, mem);
@@ -801,10 +842,10 @@ static int bl808_i2c_probe(struct platform_device *pdev){
                 goto err_disable_unprepare_clk;
         }
 
-        ret = devm_request_irq(&pdev->dev, i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
+        ret = devm_request_threaded_irq(&pdev->dev, i2c_dev->irq, bl808_i2c_isr_quick, bl808_i2c_isr, IRQF_ONESHOT,
                           dev_name(&pdev->dev), i2c_dev);
         if (ret) {
-                dev_err(&pdev->dev, "Could not request IRQ\n");
+                dev_err(&pdev->dev, "Could not request IRQ %d\n", i2c_dev->irq);
                 goto err_disable_unprepare_clk;
         }
 
@@ -823,7 +864,10 @@ static int bl808_i2c_probe(struct platform_device *pdev){
         if (ret)
                 goto err_disable_unprepare_clk;
 
+
+        mutex_lock(&i2c_dev->isr_mutex);
         bl808_i2c_init(i2c_dev);
+        mutex_unlock(&i2c_dev->isr_mutex);
 
         return 0;
 

@@ -451,14 +451,12 @@ static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inter
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        i2c_dev->isr_mask = (interrupts & (BL808_I2C_STS_END_EN |
+        val |= (interrupts & (BL808_I2C_STS_END_EN |
                 BL808_I2C_STS_TXF_EN |
                 BL808_I2C_STS_RXF_EN |
                 BL808_I2C_STS_NAK_EN |
                 BL808_I2C_STS_ARB_EN |
                 BL808_I2C_STS_FER_EN));
-
-        val |= i2c_dev->isr_mask;
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -468,14 +466,16 @@ static void bl808_i2c_unmask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inter
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        i2c_dev->isr_mask = ~(interrupts & (BL808_I2C_STS_END_MASK |
+        val &= ~(interrupts & (BL808_I2C_STS_END_MASK |
                 BL808_I2C_STS_TXF_MASK |
                 BL808_I2C_STS_RXF_MASK |
                 BL808_I2C_STS_NAK_MASK |
                 BL808_I2C_STS_ARB_MASK |
                 BL808_I2C_STS_FER_MASK));
 
-        val &= i2c_dev->isr_mask;
+        i2c_dev->isr_mask & BL808_I2C_STS_ALL_MASK;
+
+        dev_dbg(i2c_dev->dev, "IRQ mask=0x%x val=0x%x\n", i2c_dev->isr_mask, val);
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -506,6 +506,10 @@ static void bl808_i2c_mask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interru
                 BL808_I2C_STS_NAK_MASK |
                 BL808_I2C_STS_ARB_MASK |
                 BL808_I2C_STS_FER_MASK));
+
+        i2c_dev->isr_mask = val & BL808_I2C_STS_ALL_MASK;
+
+        dev_dbg(i2c_dev->dev, "IRQ mask=0x%x val=0x%x\n", i2c_dev->isr_mask, val);
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }

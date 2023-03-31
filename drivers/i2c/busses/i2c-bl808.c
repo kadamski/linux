@@ -563,6 +563,7 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
                 bl808_i2c_enable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN & ~BL808_I2C_STS_TXF_EN);
         } else {
                 bl808_i2c_set_dir(i2c_dev, false);
+                bl808_fill_tx_fifo(i2c_dev);
                 bl808_i2c_unmask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK & ~BL808_I2C_STS_RXF_MASK);
                 bl808_i2c_enable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN & ~BL808_I2C_STS_RXF_EN);
         }

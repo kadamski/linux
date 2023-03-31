@@ -588,9 +588,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        if(hweight32(val & 0x3f) > 1) {
-                dev_err(i2c_dev->dev, "Multiple interrupts %u, sts=0x%x\n", val & 0x3f, val);
-        }
+        dev_err(i2c_dev->dev, "IRQ sts=0x%x, %d, %p\n", val, i2c_dev->num_msgs, i2c_dev->curr_msg);
 
         if (!i2c_dev->curr_msg) {
                 dev_err(i2c_dev->dev, "Unexpected interrupt (no running transfer)\n");

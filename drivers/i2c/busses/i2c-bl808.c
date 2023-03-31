@@ -385,7 +385,6 @@ static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr
                 val &= ~BL808_I2C_CONFIG_10B_ADDR_EN;
         }
 
-        val &= ~BL808_I2C_CONFIG_SCL_SYNC_EN;
         bl808_i2c_writel(i2c_dev, BL808_I2C_SUB_ADDR, sub_addr);
         bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
@@ -589,7 +588,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        dev_err(i2c_dev->dev, "IRQ sts=0x%x, %d, %p\n", val, i2c_dev->num_msgs, i2c_dev->curr_msg);
+        /*dev_err(i2c_dev->dev, "IRQ sts=0x%x, %d, %p\n", val, i2c_dev->num_msgs, i2c_dev->curr_msg);*/
 
         if (!i2c_dev->curr_msg) {
                 dev_err(i2c_dev->dev, "Unexpected interrupt (no running transfer)\n");
@@ -603,6 +602,19 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
         } else if (val & BL808_I2C_STS_NAK_INT) {
                 dev_dbg(i2c_dev->dev, "Could not get ACK\n");
                 i2c_dev->msg_err = -ENXIO;
+                goto complete;
+        } else if (val & BL808_I2C_STS_END_INT) {
+                if (i2c_dev->curr_msg->flags & I2C_M_RD) {
+                        bl808_drain_rx_fifo(i2c_dev);
+                }
+
+                if (i2c_dev->msg_buf_remaining){
+                        dev_err(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
+			i2c_dev->msg_err = -EREMOTEIO;
+                } else{
+			i2c_dev->msg_err = 0;
+                }
+
                 goto complete;
         } else if (val & BL808_I2C_STS_FER_INT) {
                 u32 config_0, config_1, tx_cnt, rx_cnt;
@@ -623,19 +635,6 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
                 i2c_dev->msg_err = -EIO;
                 bl808_i2c_clear_fifo_err(i2c_dev);
-
-                goto complete;
-        } else if (val & BL808_I2C_STS_END_INT) {
-                if (i2c_dev->curr_msg->flags & I2C_M_RD) {
-                        bl808_drain_rx_fifo(i2c_dev);
-                }
-
-                if (i2c_dev->msg_buf_remaining){
-                        dev_err(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
-			i2c_dev->msg_err = -EREMOTEIO;
-                } else{
-			i2c_dev->msg_err = 0;
-                }
 
                 goto complete;
         } else if (val & BL808_I2C_STS_RXF_INT) {

@@ -663,19 +663,17 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                         bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_EN);
                         return IRQ_HANDLED;
                 }
-
-                if(i2c_dev->msg_buf_remaining) {
-                        bl808_fill_tx_fifo(i2c_dev);
-                }
-
-                if (i2c_dev->num_msgs && !i2c_dev->msg_buf_remaining) {
+                if (!i2c_dev->msg_buf_remaining) {
                         i2c_dev->curr_msg++;
                         ret = bl808_i2c_start_transfer(i2c_dev);
                         if (ret) {
                                 i2c_dev->msg_err = ret;
                                 goto complete;
                         }
+                        return IRQ_HANDLED;
                 }
+
+                bl808_fill_tx_fifo(i2c_dev);
 
                 return IRQ_HANDLED;
         }

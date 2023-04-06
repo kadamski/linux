@@ -368,10 +368,11 @@ static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr
         u32 val;
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 
+
         if(sub_addr_size > 0) {
                 val |= BL808_I2C_CONFIG_SUB_ADDR_EN;
                 val &= ~BL808_I2C_CONFIG_SUB_ADDR_BC_MASK;
-                val |= ((sub_addr_size -1) >> BL808_I2C_CONFIG_SUB_ADDR_BC_SHIFT);
+                val |= ((sub_addr_size -1) << BL808_I2C_CONFIG_SUB_ADDR_BC_SHIFT);
         } else {
                 val &= ~BL808_I2C_CONFIG_SUB_ADDR_EN;
         }

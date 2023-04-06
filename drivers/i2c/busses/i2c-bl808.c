@@ -100,36 +100,21 @@
  * cleared
  */
 #define BL808_I2C_STS_FER_INT                   BIT(5)
-/* interrupt masks */
-#define BL808_I2C_STS_END_MASK                  BIT(8)
-#define BL808_I2C_STS_TXF_MASK                  BIT(9)
-#define BL808_I2C_STS_RXF_MASK                  BIT(10)
-#define BL808_I2C_STS_NAK_MASK                  BIT(11)
-#define BL808_I2C_STS_ARB_MASK                  BIT(12)
-#define BL808_I2C_STS_FER_MASK                  BIT(13)
-#define BL808_I2C_STS_ALL_MASK                  (BL808_I2C_STS_END_MASK | \
-                                                 BL808_I2C_STS_TXF_MASK | \
-                                                 BL808_I2C_STS_RXF_MASK | \
-                                                 BL808_I2C_STS_NAK_MASK | \
-                                                 BL808_I2C_STS_ARB_MASK | \
-                                                 BL808_I2C_STS_FER_MASK)
+#define BL808_I2C_STS_ALL_INT                   (BL808_I2C_STS_END_INT | \
+                                                 BL808_I2C_STS_TXF_INT | \
+                                                 BL808_I2C_STS_RXF_INT | \
+                                                 BL808_I2C_STS_NAK_INT | \
+                                                 BL808_I2C_STS_ARB_INT | \
+                                                 BL808_I2C_STS_FER_INT)
+
+#define BL808_I2C_STS_MASK_SHIFT                8
+#define BL808_I2C_STS_EN_SHIFT                  24
+
 /* interrupt clears */
 #define BL808_I2C_STS_END_CLR                   BIT(16)
 #define BL808_I2C_STS_NAK_CLR                   BIT(19)
 #define BL808_I2C_STS_ARB_CLR                   BIT(20)
-/* interrupt enables */
-#define BL808_I2C_STS_END_EN                    BIT(24)
-#define BL808_I2C_STS_TXF_EN                    BIT(25)
-#define BL808_I2C_STS_RXF_EN                    BIT(26)
-#define BL808_I2C_STS_NAK_EN                    BIT(27)
-#define BL808_I2C_STS_ARB_EN                    BIT(28)
-#define BL808_I2C_STS_FER_EN                    BIT(29)
-#define BL808_I2C_STS_ALL_EN                    (BL808_I2C_STS_END_EN | \
-                                                 BL808_I2C_STS_TXF_EN | \
-                                                 BL808_I2C_STS_RXF_EN | \
-                                                 BL808_I2C_STS_NAK_EN | \
-                                                 BL808_I2C_STS_ARB_EN | \
-                                                 BL808_I2C_STS_FER_EN)
+
 
 #define BL808_I2C_SUB_ADDR_B0_SHIFT             UL(0)
 #define BL808_I2C_SUB_ADDR_B0_MASK              (0xff <<  BL808_I2C_SUB_ADDR_B0_SHIFT)
@@ -449,27 +434,8 @@ static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inter
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val |= (interrupts & (BL808_I2C_STS_END_EN |
-                BL808_I2C_STS_TXF_EN |
-                BL808_I2C_STS_RXF_EN |
-                BL808_I2C_STS_NAK_EN |
-                BL808_I2C_STS_ARB_EN |
-                BL808_I2C_STS_FER_EN));
-
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_unmask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
-        val &= ~(interrupts & (BL808_I2C_STS_END_MASK |
-                BL808_I2C_STS_TXF_MASK |
-                BL808_I2C_STS_RXF_MASK |
-                BL808_I2C_STS_NAK_MASK |
-                BL808_I2C_STS_ARB_MASK |
-                BL808_I2C_STS_FER_MASK));
+        val |= (interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_EN_SHIFT;
+        val &= ~((interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_MASK_SHIFT);
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -479,27 +445,8 @@ static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inte
 
         val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-        val &= ~(interrupts & (BL808_I2C_STS_END_EN |
-                BL808_I2C_STS_TXF_EN |
-                BL808_I2C_STS_RXF_EN |
-                BL808_I2C_STS_NAK_EN |
-                BL808_I2C_STS_ARB_EN |
-                BL808_I2C_STS_FER_EN));
-
-        bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
-}
-
-static void bl808_i2c_mask_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
-        u32 val;
-
-        val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
-
-        val |= (interrupts & (BL808_I2C_STS_END_MASK |
-                BL808_I2C_STS_TXF_MASK |
-                BL808_I2C_STS_RXF_MASK |
-                BL808_I2C_STS_NAK_MASK |
-                BL808_I2C_STS_ARB_MASK |
-                BL808_I2C_STS_FER_MASK));
+        val &= ~((interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_EN_SHIFT);
+        val |= (interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_MASK_SHIFT;
 
         bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
@@ -508,9 +455,7 @@ static void bl808_i2c_init(struct bl808_i2c_dev *i2c_dev) {
 
         bl808_i2c_disable(i2c_dev);
 
-        bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
-
-        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
+        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_INT);
 }
 
 static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
@@ -559,13 +504,11 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
 	
         if (msg->flags & I2C_M_RD) {
                 bl808_i2c_set_dir(i2c_dev, true);
-                bl808_i2c_unmask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK & ~BL808_I2C_STS_TXF_MASK);
-                bl808_i2c_enable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN & ~BL808_I2C_STS_TXF_EN);
+                bl808_i2c_enable_interrupts(i2c_dev, (u32)~BL808_I2C_STS_TXF_INT);
         } else {
                 bl808_i2c_set_dir(i2c_dev, false);
                 bl808_fill_tx_fifo(i2c_dev);
-                bl808_i2c_unmask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK & ~BL808_I2C_STS_RXF_MASK);
-                bl808_i2c_enable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN & ~BL808_I2C_STS_RXF_EN);
+                bl808_i2c_enable_interrupts(i2c_dev, (u32)~BL808_I2C_STS_RXF_INT);
         }
 
         
@@ -660,8 +603,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
         } else if (val & BL808_I2C_STS_TXF_INT) {
                 if(!i2c_dev->msg_buf_remaining && !i2c_dev->num_msgs) {
                         dev_dbg(i2c_dev->dev, "tx fifo free but nothing to tx anymore, masking\n");
-                        bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_TXF_MASK);
-                        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_EN);
+                        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_INT);
                         return IRQ_HANDLED;
                 }
                 if (!i2c_dev->msg_buf_remaining) {
@@ -687,8 +629,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 complete:
         bl808_i2c_disable(i2c_dev);
         bl808_i2c_clear_interrupts(i2c_dev);
-        bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
-        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
+        bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_INT);
         complete(&i2c_dev->completion);
 
         return IRQ_HANDLED;
@@ -719,8 +660,7 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
         if (time_left == 0) {
                 bl808_i2c_disable(i2c_dev);
                 bl808_i2c_clear_interrupts(i2c_dev);
-                bl808_i2c_mask_interrupts(i2c_dev, BL808_I2C_STS_ALL_MASK);
-                bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_EN);
+                bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_INT);
                 /* maybe reset bus here? */
                 dev_err(i2c_dev->dev, "i2c transfer timed out\n");
 		return -ETIMEDOUT;

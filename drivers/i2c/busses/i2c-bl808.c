@@ -545,7 +545,15 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
                 if (i2c_dev->msg_buf_remaining){
                         dev_err(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
 			i2c_dev->msg_err = -EREMOTEIO;
-                } else{
+                } else if (i2c_dev->num_msgs) {
+                        i2c_dev->curr_msg++;
+                        ret = bl808_i2c_start_transfer(i2c_dev);
+                        if (ret) {
+                                i2c_dev->msg_err = ret;
+                                goto complete;
+                        }
+                        return IRQ_HANDLED;
+                } else {
 			i2c_dev->msg_err = 0;
                 }
 
@@ -591,21 +599,11 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
 
                 return IRQ_HANDLED;
         } else if (val & BL808_I2C_STS_TXF_INT) {
-                if(!i2c_dev->msg_buf_remaining && !i2c_dev->num_msgs) {
+                if (!i2c_dev->msg_buf_remaining) {
                         dev_dbg(i2c_dev->dev, "tx fifo free but nothing to tx anymore, masking\n");
                         bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_INT);
                         return IRQ_HANDLED;
                 }
-                if (!i2c_dev->msg_buf_remaining) {
-                        i2c_dev->curr_msg++;
-                        ret = bl808_i2c_start_transfer(i2c_dev);
-                        if (ret) {
-                                i2c_dev->msg_err = ret;
-                                goto complete;
-                        }
-                        return IRQ_HANDLED;
-                }
-
                 bl808_fill_tx_fifo(i2c_dev);
 
                 return IRQ_HANDLED;

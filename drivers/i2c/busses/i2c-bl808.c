@@ -334,7 +334,7 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
                         i2c_dev->msg_buf[3] = (temp >> 24) & 0xff;
 
                         i2c_dev->msg_buf += 4;
-                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
+                        i2c_dev->msg_buf_remaining -= 4;
                 } else if (i2c_dev->msg_buf_remaining > 0) {
                         for (u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
                                 i2c_dev->msg_buf[i] = (u8)(temp >> (i * 8)) & 0xff;

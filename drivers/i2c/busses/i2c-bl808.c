@@ -326,23 +326,13 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
         rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
 
         while (rx_fifo_free > 0) {
+                u16 bytes_to_drain = min_t(u16, i2c_dev->msg_buf_remaining, 4);
                 temp = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_RDATA);
-                if (i2c_dev->msg_buf_remaining >= 4) {
-                        i2c_dev->msg_buf[0] = (temp >>  0) & 0xff;
-                        i2c_dev->msg_buf[1] = (temp >>  8) & 0xff;
-                        i2c_dev->msg_buf[2] = (temp >> 16) & 0xff;
-                        i2c_dev->msg_buf[3] = (temp >> 24) & 0xff;
+                for (u8 i = 0; i < i2c_dev->msg_buf_remaining; i++)
+                        i2c_dev->msg_buf[i] = (u8)(temp >> (i * 8)) & 0xff;
 
-                        i2c_dev->msg_buf += 4;
-                        i2c_dev->msg_buf_remaining -= 4;
-                } else if (i2c_dev->msg_buf_remaining > 0) {
-                        for (u8 i = 0; i < i2c_dev->msg_buf_remaining; i++) {
-                                i2c_dev->msg_buf[i] = (u8)(temp >> (i * 8)) & 0xff;
-                        }
-
-                        i2c_dev->msg_buf += i2c_dev->msg_buf_remaining;
-                        i2c_dev->msg_buf_remaining -= i2c_dev->msg_buf_remaining;
-                }
+                i2c_dev->msg_buf += bytes_to_drain;
+                i2c_dev->msg_buf_remaining -= bytes_to_drain;
 
                 val = bl808_i2c_readl(i2c_dev, BL808_I2C_FIFO_CONFIG_1);
                 rx_fifo_free = (val & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;

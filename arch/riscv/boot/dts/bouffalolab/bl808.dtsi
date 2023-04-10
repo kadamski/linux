@@ -52,11 +52,31 @@
 		#clock-cells = <0>;
 	};
 
+	mm_b: mm_bclk1x {
+		compatible = "fixed-clock";
+		clock-frequency = <160000000>;
+		clock-output-names = "mm_b";
+		#clock-cells = <0>;
+	};
+
+	pll160m: muxpll_160m {
+		compatible = "fixed-clock";
+		clock-frequency = <160000000>;
+		clock-output-names = "muxpll_160m";
+		#clock-cells = <0>;
+	};
+
 	enet: enet-clk {
 		compatible = "fixed-clock";
 		clock-frequency = <50000000>;
 		clock-output-names = "enet";
 		#clock-cells = <0>;
+	};
+
+	glb_mux: glb_mux {
+		#clock-cells = <1>;
+		compatible = "bflb,mux-clock";
+		reg = <0x30007000 4>;
 	};
 
 	soc {
@@ -101,7 +121,7 @@
 			compatible = "bflb,bl808-uart";
 			reg = <0x30002000 0x1000>;
 			interrupts = <20 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&xtal>;
+			clocks = <&glb_mux 0>;
 			status = "disabled";
 		};
 		

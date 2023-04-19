@@ -215,11 +215,10 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
 
 	divider = clk_bl808_i2c_calc_divider(rate, parent_rate);
 
-	if(divider == 0) {
+	if (divider == 0)
 		return -EINVAL;
-	}
 
-	if(divider > 0xff) {
+	if (divider > 0xff) {
 		divider = 0xff;
 		dev_warn(div->i2c_dev->dev, "requested rate %lu is slower than minmum, setting to slowest possible rate\n", rate);
 	}
@@ -347,22 +346,20 @@ static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 
 
-	if(sub_addr_size > 0) {
+	if (sub_addr_size > 0) {
 		val |= BL808_I2C_CONFIG_SUB_ADDR_EN;
 		val &= ~BL808_I2C_CONFIG_SUB_ADDR_BC_MASK;
 		val |= ((sub_addr_size -1) << BL808_I2C_CONFIG_SUB_ADDR_BC_SHIFT);
-	} else {
+	} else
 		val &= ~BL808_I2C_CONFIG_SUB_ADDR_EN;
-	}
 
 	val &= ~BL808_I2C_CONFIG_SLV_ADDR_MASK;
 	val |= (target_addr << BL808_I2C_CONFIG_SLV_ADDR_SHIFT);
 
-	if(is_addr_10bit) {
+	if (is_addr_10bit)
 		val |= BL808_I2C_CONFIG_10B_ADDR_EN;
-	} else {
+	else
 		val &= ~BL808_I2C_CONFIG_10B_ADDR_EN;
-	}
 
 	bl808_i2c_writel(i2c_dev, BL808_I2C_SUB_ADDR, sub_addr);
 	bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
@@ -373,11 +370,10 @@ static void bl808_i2c_set_dir(struct bl808_i2c_dev *i2c_dev, bool is_in)
 	u32 val;
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 
-	if(is_in) {
+	if (is_in)
 		val |= BL808_I2C_CONFIG_PKT_DIR;
-	} else {
+	else
 		val &= ~BL808_I2C_CONFIG_PKT_DIR;
-	}
 
 	bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
@@ -552,9 +548,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 		i2c_dev->msg_err = -ENXIO;
 		goto complete;
 	} else if (val & BL808_I2C_STS_END_INT) {
-		if (i2c_dev->curr_msg->flags & I2C_M_RD) {
+		if (i2c_dev->curr_msg->flags & I2C_M_RD)
 			bl808_drain_rx_fifo(i2c_dev);
-		}
 
 		if (i2c_dev->msg_buf_remaining){
 			dev_err(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
@@ -567,9 +562,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 				goto complete;
 			}
 			return IRQ_HANDLED;
-		} else {
+		} else
 			i2c_dev->msg_err = 0;
-		}
 
 		goto complete;
 	} else if (val & BL808_I2C_STS_FER_INT) {
@@ -594,7 +588,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 
 		goto complete;
 	} else if (val & BL808_I2C_STS_RXF_INT) {
-		if(!i2c_dev->msg_buf_remaining) {
+		if (!i2c_dev->msg_buf_remaining) {
 			dev_err(i2c_dev->dev, "wants receive data to be popped, but no where to put\n");
 			i2c_dev->msg_err = -EREMOTEIO;
 			goto complete;
@@ -650,9 +644,8 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 
 	i2c_dev->msg_err = 0;
 	ret = bl808_i2c_start_transfer(i2c_dev);
-	if (ret) {
+	if (ret)
 		return ret;
-	}
 
 	time_left = wait_for_completion_timeout(&i2c_dev->completion,
 						adap->timeout);
@@ -668,9 +661,8 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 		return -ETIMEDOUT;
 	}
 
-	if (!i2c_dev->msg_err){
+	if (!i2c_dev->msg_err)
 		return num;
-	}
 
 	dev_dbg(i2c_dev->dev, "i2c transfer failed: 0x%x | %d\n", i2c_dev->msg_err, i2c_dev->msg_err);
 	return i2c_dev->msg_err;
@@ -698,6 +690,7 @@ static int bl808_i2c_probe(struct platform_device *pdev)
 	i2c_dev = devm_kzalloc(&pdev->dev, sizeof(*i2c_dev), GFP_KERNEL);
 	if (!i2c_dev)
 		return -ENOMEM;
+
 	platform_set_drvdata(pdev, i2c_dev);
 	i2c_dev->dev = &pdev->dev;
 	init_completion(&i2c_dev->completion);

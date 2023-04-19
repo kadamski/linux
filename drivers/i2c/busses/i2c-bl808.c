@@ -699,10 +699,9 @@ static int bl808_i2c_probe(struct platform_device *pdev){
 
 	i2c_dev->bus_clk = bl808_i2c_register_div(&pdev->dev, mclk, i2c_dev);
 
-	if (IS_ERR(i2c_dev->bus_clk)) {
-		dev_err(&pdev->dev, "Could not register clock\n");
-		return PTR_ERR(i2c_dev->bus_clk);
-	}
+	if (IS_ERR(i2c_dev->bus_clk))
+		return dev_err_probe(&pdev->dev, PTR_ERR(i2c_dev->bus_clk),
+				     "Could not register clock\n");
 
 	ret = of_property_read_u32(pdev->dev.of_node, "clock-frequency",
 				   &bus_clk_rate);
@@ -713,27 +712,26 @@ static int bl808_i2c_probe(struct platform_device *pdev){
 	}
 
 	ret = clk_set_rate_exclusive(i2c_dev->bus_clk, bus_clk_rate);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Could not set clock frequency\n");
-		return ret;
-	}
+	if (ret < 0)
+		return dev_err_probe(&pdev->dev, ret, "Could not set clock frequency\n");
 
 	ret = clk_prepare_enable(i2c_dev->bus_clk);
 	if (ret) {
-		dev_err(&pdev->dev, "Couldn't prepare clock");
+		dev_err_probe(&pdev->dev, ret, "Couldn't prepare clock");
 		goto err_put_exclusive_rate;
 	}
 
 	i2c_dev->irq = platform_get_irq(pdev, 0);
 	if (i2c_dev->irq < 0) {
 		ret = i2c_dev->irq;
+		dev_err_probe(&pdev->dev, ret, "Couldn't get irq\n");
 		goto err_disable_unprepare_clk;
 	}
 
 	ret = devm_request_irq(&pdev->dev, i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
-			  dev_name(&pdev->dev), i2c_dev);
+			       dev_name(&pdev->dev), i2c_dev);
 	if (ret) {
-		dev_err(&pdev->dev, "Could not request IRQ\n");
+		dev_err_probe(&pdev->dev, ret, "Could not request IRQ\n");
 		goto err_disable_unprepare_clk;
 	}
 

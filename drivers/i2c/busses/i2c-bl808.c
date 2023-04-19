@@ -204,11 +204,7 @@ struct clk_bl808_i2c {
 
 static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate)
 {
-	u32 divider;
-
-	divider = ((parent_rate/4)/rate) -1;
-
-	return divider;
+	return ((parent_rate / 4) / rate) - 1;
 }
 
 static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigned long parent_rate)

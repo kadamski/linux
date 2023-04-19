@@ -202,7 +202,8 @@ struct clk_bl808_i2c {
 	struct bl808_i2c_dev *i2c_dev;
 };
 
-static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate) {
+static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate)
+{
 	u32 divider;
 
 	divider = ((parent_rate/4)/rate) -1;
@@ -210,7 +211,8 @@ static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_r
 	return divider;
 }
 
-static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigned long parent_rate) {
+static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigned long parent_rate)
+{
 	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
 	u32 val;
 	u32 divider;
@@ -240,13 +242,15 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
 	return 0;
 }
 
-static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate, unsigned long *parent_rate) {
+static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate, unsigned long *parent_rate)
+{
 	u32 divider = clk_bl808_i2c_calc_divider(rate, *parent_rate);
 
 	return *parent_rate/((divider + 1) * 4);
 }
 
-static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long parent_rate) {
+static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
+{
 	u32 val;
 	u32 divider;
 	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
@@ -292,7 +296,8 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, 
 	return devm_clk_register(dev, &priv->hw);
 }
 
-static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev)
+{
 	u32 val;
 	u32 tx_fifo_free;
 
@@ -316,7 +321,8 @@ static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev) {
 	}
 }
 
-static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev)
+{
 	u32 val;
 	u32 temp = 0;
 	u32 rx_fifo_free;
@@ -339,7 +345,8 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev) {
 	}
 }
 
-static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr, u16 sub_addr, u8 sub_addr_size, bool is_addr_10bit) {
+static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr, u16 sub_addr, u8 sub_addr_size, bool is_addr_10bit)
+{
 	u32 val;
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 
@@ -365,7 +372,8 @@ static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr
 	bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
-static void bl808_i2c_set_dir(struct bl808_i2c_dev *i2c_dev, bool is_in) {
+static void bl808_i2c_set_dir(struct bl808_i2c_dev *i2c_dev, bool is_in)
+{
 	u32 val;
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 
@@ -378,7 +386,8 @@ static void bl808_i2c_set_dir(struct bl808_i2c_dev *i2c_dev, bool is_in) {
 	bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
-static void bl808_i2c_set_datalen(struct bl808_i2c_dev *i2c_dev, u16 data_len) {
+static void bl808_i2c_set_datalen(struct bl808_i2c_dev *i2c_dev, u16 data_len)
+{
 	u32 val;
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 	val &= ~BL808_I2C_CONFIG_PKT_LEN_MASK;
@@ -386,14 +395,16 @@ static void bl808_i2c_set_datalen(struct bl808_i2c_dev *i2c_dev, u16 data_len) {
 	bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
-static void bl808_i2c_enable(struct bl808_i2c_dev *i2c_dev){
+static void bl808_i2c_enable(struct bl808_i2c_dev *i2c_dev)
+{
 	u32 val;
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
 	val |= BL808_I2C_CONFIG_M_EN;
 	bl808_i2c_writel(i2c_dev, BL808_I2C_CONFIG, val);
 }
 
-static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev)
+{
 	u32 val = BL808_I2C_STS_END_CLR |
 		  BL808_I2C_STS_NAK_CLR |
 		  BL808_I2C_STS_ARB_CLR;
@@ -401,14 +412,16 @@ static void bl808_i2c_clear_interrupts(struct bl808_i2c_dev *i2c_dev) {
 	bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_clear_fifo_err(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_clear_fifo_err(struct bl808_i2c_dev *i2c_dev)
+{
 	u32 val = (BL808_I2C_FIFO_CONFIG_0_RX_FIFO_CLR |
 		   BL808_I2C_FIFO_CONFIG_0_TX_FIFO_CLR);
 
 	bl808_i2c_writel(i2c_dev,  BL808_I2C_FIFO_CONFIG_0, val);
 }
 
-static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev){
+static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev)
+{
 	u32 val;
 	/* disable i2c */
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
@@ -419,7 +432,8 @@ static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev){
 	bl808_i2c_clear_interrupts(i2c_dev);
 }
 
-static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
+static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts)
+{
 	u32 val;
 
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
@@ -430,7 +444,8 @@ static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inter
 	bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts) {
+static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts)
+{
 	u32 val;
 
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
@@ -441,15 +456,16 @@ static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 inte
 	bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_init(struct bl808_i2c_dev *i2c_dev) {
+static void bl808_i2c_init(struct bl808_i2c_dev *i2c_dev)
+{
 
 	bl808_i2c_disable(i2c_dev);
 
 	bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_ALL_INT);
 }
 
-static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
-
+static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev)
+{
 	struct i2c_msg *msg = i2c_dev->curr_msg;
 	struct i2c_msg *nxt_msg;
 	bool is_ten_bit = (msg->flags & I2C_M_TEN);
@@ -507,7 +523,8 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev) {
 	return 0;
 }
 
-static void bl808_i2c_finish_transfer(struct bl808_i2c_dev *i2c_dev){
+static void bl808_i2c_finish_transfer(struct bl808_i2c_dev *i2c_dev)
+{
 	i2c_dev->curr_msg = NULL;
 	i2c_dev->num_msgs = 0;
 
@@ -515,7 +532,8 @@ static void bl808_i2c_finish_transfer(struct bl808_i2c_dev *i2c_dev){
 	i2c_dev->msg_buf_remaining = 0;
 }
 
-static irqreturn_t bl808_i2c_isr(int this_isq, void *data) {
+static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
+{
 	struct bl808_i2c_dev *i2c_dev = data;
 	u32 val;
 	int ret;
@@ -672,7 +690,8 @@ static const struct i2c_algorithm bl808_i2c_algo = {
 	.functionality	= bl808_i2c_func,
 };
 
-static int bl808_i2c_probe(struct platform_device *pdev){
+static int bl808_i2c_probe(struct platform_device *pdev)
+{
 	struct bl808_i2c_dev *i2c_dev;
 	struct resource *mem;
 	int ret;

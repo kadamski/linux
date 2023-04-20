@@ -179,11 +179,13 @@ struct bl808_i2c_dev {
 	struct completion completion;
 	struct i2c_msg *curr_msg;
 	struct clk *bus_clk;
+	struct clk_hw hw;
 	int num_msgs;
 	int msg_err;
 	u8 *msg_buf;
 	u16 msg_buf_remaining;
 };
+#define clk_to_bl808_i2c(_hw) container_of(_hw, struct bl808_i2c_dev, hw)
 
 static inline void bl808_i2c_writel(struct bl808_i2c_dev *i2c_dev, u32 reg,
 				    u32 val)
@@ -197,12 +199,6 @@ static inline u32 bl808_i2c_readl(struct bl808_i2c_dev *i2c_dev, u32 reg)
 	return readl(i2c_dev->regs + reg);
 }
 
-#define to_clk_bl808_i2c(_hw) container_of(_hw, struct clk_bl808_i2c, hw)
-struct clk_bl808_i2c {
-	struct clk_hw hw;
-	struct bl808_i2c_dev *i2c_dev;
-};
-
 static u32 clk_bl808_i2c_calc_divider(unsigned long rate,
 				      unsigned long parent_rate)
 {
@@ -212,8 +208,8 @@ static u32 clk_bl808_i2c_calc_divider(unsigned long rate,
 static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate,
 				  unsigned long parent_rate)
 {
-	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
-	struct device *dev = div->i2c_dev->dev;
+	struct bl808_i2c_dev *i2c_dev = clk_to_bl808_i2c(hw);
+	struct device *dev = i2c_dev->dev;
 	u32 val;
 	u32 divider;
 
@@ -236,9 +232,9 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate,
 	val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_2_SHIFT;
 	val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_3_SHIFT;
 
-	bl808_i2c_writel(div->i2c_dev, BL808_I2C_PRD_START, val);
-	bl808_i2c_writel(div->i2c_dev, BL808_I2C_PRD_DATA, val);
-	bl808_i2c_writel(div->i2c_dev, BL808_I2C_PRD_STOP, val);
+	bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_START, val);
+	bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_DATA, val);
+	bl808_i2c_writel(i2c_dev, BL808_I2C_PRD_STOP, val);
 
 	return 0;
 }
@@ -257,9 +253,9 @@ static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw,
 {
 	u32 val;
 	u32 divider;
-	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
+	struct bl808_i2c_dev *i2c_dev = clk_to_bl808_i2c(hw);
 
-	val = bl808_i2c_readl(div->i2c_dev, BL808_I2C_PRD_START);
+	val = bl808_i2c_readl(i2c_dev, BL808_I2C_PRD_START);
 
 	divider = val & 0xff;
 
@@ -276,7 +272,6 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk,
 					  struct bl808_i2c_dev *i2c_dev)
 {
 	struct clk_init_data init = {};
-	struct clk_bl808_i2c *priv;
 	char name[32];
 	const char *mclk_name;
 
@@ -289,15 +284,10 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk,
 	init.parent_names = (const char* []) { mclk_name };
 	init.num_parents = 1;
 
-	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
-	if (priv == NULL)
-		return ERR_PTR(-ENOMEM);
+	i2c_dev->hw.init = &init;
 
-	priv->hw.init = &init;
-	priv->i2c_dev = i2c_dev;
-
-	clk_hw_register_clkdev(&priv->hw, "div", dev_name(dev));
-	return devm_clk_register(dev, &priv->hw);
+	clk_hw_register_clkdev(&i2c_dev->hw, "div", dev_name(dev));
+	return devm_clk_register(dev, &i2c_dev->hw);
 }
 
 static void bl808_fill_tx_fifo(struct bl808_i2c_dev *i2c_dev)

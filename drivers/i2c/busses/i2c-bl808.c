@@ -280,7 +280,7 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, 
 	init.parent_names = (const char* []) { mclk_name };
 	init.num_parents = 1;
 
-	priv = devm_kzalloc(dev, sizeof(struct clk_bl808_i2c), GFP_KERNEL);
+	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (priv == NULL)
 		return ERR_PTR(-ENOMEM);
 

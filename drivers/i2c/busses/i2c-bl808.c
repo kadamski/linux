@@ -210,6 +210,7 @@ static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_r
 static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigned long parent_rate)
 {
 	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
+	struct device *dev = div->i2c_dev->dev;
 	u32 val;
 	u32 divider;
 
@@ -220,10 +221,10 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
 
 	if (divider > 0xff) {
 		divider = 0xff;
-		dev_warn(div->i2c_dev->dev, "requested rate %lu is slower than minmum, setting to slowest possible rate\n", rate);
+		dev_warn(dev, "requested rate %lu is slower than minmum, setting to slowest possible rate\n", rate);
 	}
 
-	dev_dbg(div->i2c_dev->dev, "requested rate: %lu, parent rate: %lu, divider 0x%x\n", rate, parent_rate, divider);
+	dev_dbg(dev, "requested rate: %lu, parent rate: %lu, divider 0x%x\n", rate, parent_rate, divider);
 
 	val =  (divider & 0xff) << BL808_I2C_PRD_S_PH_0_SHIFT;
 	val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_1_SHIFT;
@@ -527,6 +528,7 @@ static void bl808_i2c_finish_transfer(struct bl808_i2c_dev *i2c_dev)
 static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 {
 	struct bl808_i2c_dev *i2c_dev = data;
+	struct device *dev = i2c_dev->dev;
 	u32 val;
 	int ret;
 
@@ -535,16 +537,16 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 	/*dev_err(i2c_dev->dev, "IRQ sts=0x%x, %d, %p\n", val, i2c_dev->num_msgs, i2c_dev->curr_msg);*/
 
 	if (!i2c_dev->curr_msg) {
-		dev_err(i2c_dev->dev, "Unexpected interrupt (no running transfer)\n");
+		dev_err(dev, "Unexpected interrupt (no running transfer)\n");
 		goto complete;
 	}
 
 	if (val & BL808_I2C_STS_ARB_INT) {
-		dev_dbg(i2c_dev->dev, "Arbitration lost\n");
+		dev_dbg(dev, "Arbitration lost\n");
 		i2c_dev->msg_err = -EAGAIN;
 		goto complete;
 	} else if (val & BL808_I2C_STS_NAK_INT) {
-		dev_dbg(i2c_dev->dev, "Could not get ACK\n");
+		dev_dbg(dev, "Could not get ACK\n");
 		i2c_dev->msg_err = -ENXIO;
 		goto complete;
 	} else if (val & BL808_I2C_STS_END_INT) {
@@ -552,7 +554,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 			bl808_drain_rx_fifo(i2c_dev);
 
 		if (i2c_dev->msg_buf_remaining){
-			dev_err(i2c_dev->dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
+			dev_err(dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
 			i2c_dev->msg_err = -EREMOTEIO;
 		} else if (i2c_dev->num_msgs) {
 			i2c_dev->curr_msg++;
@@ -588,7 +590,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 		goto complete;
 	} else if (val & BL808_I2C_STS_RXF_INT) {
 		if (!i2c_dev->msg_buf_remaining) {
-			dev_err(i2c_dev->dev, "wants receive data to be popped, but no where to put\n");
+			dev_err(dev, "wants receive data to be popped, but no where to put\n");
 			i2c_dev->msg_err = -EREMOTEIO;
 			goto complete;
 		}
@@ -607,7 +609,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 		return IRQ_HANDLED;
 	} else if (val & BL808_I2C_STS_TXF_INT) {
 		if (!i2c_dev->msg_buf_remaining) {
-			dev_dbg(i2c_dev->dev, "tx fifo free but nothing to tx anymore, masking\n");
+			dev_dbg(dev, "tx fifo free but nothing to tx anymore, masking\n");
 			bl808_i2c_disable_interrupts(i2c_dev, BL808_I2C_STS_TXF_INT);
 			return IRQ_HANDLED;
 		}
@@ -616,7 +618,7 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 		return IRQ_HANDLED;
 	}
 
-	dev_warn(i2c_dev->dev, "Unexpected interrupt: 0x%x\n", val);
+	dev_warn(dev, "Unexpected interrupt: 0x%x\n", val);
 	bl808_i2c_clear_interrupts(i2c_dev);
 
 	return IRQ_HANDLED;
@@ -681,6 +683,7 @@ static int bl808_i2c_probe(struct platform_device *pdev)
 {
 	struct bl808_i2c_dev *i2c_dev;
 	struct resource *mem;
+	struct device *dev = &pdev->dev;
 	int ret;
 	struct i2c_adapter *adap;
 	struct clk *mclk;
@@ -699,46 +702,44 @@ static int bl808_i2c_probe(struct platform_device *pdev)
 	if (IS_ERR(i2c_dev->regs))
 		return PTR_ERR(i2c_dev->regs);
 
-	mclk = devm_clk_get(&pdev->dev, NULL);
+	mclk = devm_clk_get(dev, NULL);
 	if (IS_ERR(mclk))
-		return dev_err_probe(&pdev->dev, PTR_ERR(mclk),
-				     "Could not get clock\n");
+		return dev_err_probe(dev, PTR_ERR(mclk), "Could not get clock\n");
 
-	i2c_dev->bus_clk = bl808_i2c_register_div(&pdev->dev, mclk, i2c_dev);
+	i2c_dev->bus_clk = bl808_i2c_register_div(dev, mclk, i2c_dev);
 
 	if (IS_ERR(i2c_dev->bus_clk))
-		return dev_err_probe(&pdev->dev, PTR_ERR(i2c_dev->bus_clk),
+		return dev_err_probe(dev, PTR_ERR(i2c_dev->bus_clk),
 				     "Could not register clock\n");
 
-	ret = of_property_read_u32(pdev->dev.of_node, "clock-frequency",
+	ret = of_property_read_u32(dev->of_node, "clock-frequency",
 				   &bus_clk_rate);
 	if (ret < 0) {
-		dev_warn(&pdev->dev,
-			 "Could not read clock-frequency property\n");
+		dev_warn(dev, "Could not read clock-frequency property\n");
 		bus_clk_rate = I2C_MAX_STANDARD_MODE_FREQ;
 	}
 
 	ret = clk_set_rate_exclusive(i2c_dev->bus_clk, bus_clk_rate);
 	if (ret < 0)
-		return dev_err_probe(&pdev->dev, ret, "Could not set clock frequency\n");
+		return dev_err_probe(dev, ret, "Could not set clock frequency\n");
 
 	ret = clk_prepare_enable(i2c_dev->bus_clk);
 	if (ret) {
-		dev_err_probe(&pdev->dev, ret, "Couldn't prepare clock");
+		dev_err_probe(dev, ret, "Couldn't prepare clock");
 		goto err_put_exclusive_rate;
 	}
 
 	i2c_dev->irq = platform_get_irq(pdev, 0);
 	if (i2c_dev->irq < 0) {
 		ret = i2c_dev->irq;
-		dev_err_probe(&pdev->dev, ret, "Couldn't get irq\n");
+		dev_err_probe(dev, ret, "Couldn't get irq\n");
 		goto err_disable_unprepare_clk;
 	}
 
-	ret = devm_request_irq(&pdev->dev, i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
+	ret = devm_request_irq(dev, i2c_dev->irq, bl808_i2c_isr, IRQF_SHARED,
 			       dev_name(&pdev->dev), i2c_dev);
 	if (ret) {
-		dev_err_probe(&pdev->dev, ret, "Could not request IRQ\n");
+		dev_err_probe(dev, ret, "Could not request IRQ\n");
 		goto err_disable_unprepare_clk;
 	}
 
@@ -747,11 +748,11 @@ static int bl808_i2c_probe(struct platform_device *pdev)
 	adap->owner = THIS_MODULE;
 	adap->class = I2C_CLASS_DEPRECATED;
 	snprintf(adap->name, sizeof(adap->name), "bl808 (%s)",
-		 of_node_full_name(pdev->dev.of_node));
+		 of_node_full_name(dev->of_node));
 	adap->algo = &bl808_i2c_algo;
-	adap->dev.parent = &pdev->dev;
-	adap->dev.of_node = pdev->dev.of_node;
-	adap->quirks = of_device_get_match_data(&pdev->dev);
+	adap->dev.parent = dev;
+	adap->dev.of_node = dev->of_node;
+	adap->quirks = of_device_get_match_data(dev);
 
 	ret = i2c_add_adapter(adap);
 	if (ret)

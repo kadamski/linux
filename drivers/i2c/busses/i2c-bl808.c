@@ -816,6 +816,7 @@ static struct platform_driver bl808_i2c_driver = {
 module_platform_driver(bl808_i2c_driver);
 
 MODULE_AUTHOR("Alessandro Guttrof <hunter1753@gmail.com>");
+MODULE_AUTHOR("Krzysztof Adamski <k@japko.eu>");
 MODULE_DESCRIPTION("bl808 I2C bus adapter");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("platform:i2c-bl808");

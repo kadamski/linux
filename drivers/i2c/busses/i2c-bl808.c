@@ -340,11 +340,12 @@ static void bl808_drain_rx_fifo(struct bl808_i2c_dev *i2c_dev)
 	}
 }
 
-static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev, u16 target_addr, u16 sub_addr, u8 sub_addr_size, bool is_addr_10bit)
+static void bl808_i2c_addr_config(struct bl808_i2c_dev *i2c_dev,
+				  u16 target_addr, u16 sub_addr,
+				  u8 sub_addr_size, bool is_addr_10bit)
 {
 	u32 val;
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_CONFIG);
-
 
 	if (sub_addr_size > 0) {
 		val |= BL808_I2C_CONFIG_SUB_ADDR_EN;
@@ -499,7 +500,6 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev)
 	bl808_i2c_addr_config(i2c_dev, msg->addr, subaddr, subaddr_size, is_ten_bit);
 	bl808_i2c_set_datalen(i2c_dev, msg->len);
 
-
 	if (msg->flags & I2C_M_RD) {
 		bl808_i2c_set_dir(i2c_dev, true);
 		bl808_i2c_enable_interrupts(i2c_dev, (u32)~BL808_I2C_STS_TXF_INT);
@@ -508,7 +508,6 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev)
 		bl808_fill_tx_fifo(i2c_dev);
 		bl808_i2c_enable_interrupts(i2c_dev, (u32)~BL808_I2C_STS_RXF_INT);
 	}
-
 
 	bl808_i2c_enable(i2c_dev);
 

@@ -266,7 +266,7 @@ static const struct clk_ops clk_bl808_i2c_ops = {
 
 static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, struct bl808_i2c_dev *i2c_dev)
 {
-	struct clk_init_data init;
+	struct clk_init_data init = {};
 	struct clk_bl808_i2c *priv;
 	char name[32];
 	const char *mclk_name;
@@ -279,7 +279,6 @@ static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, 
 	init.name = name;
 	init.parent_names = (const char* []) { mclk_name };
 	init.num_parents = 1;
-	init.flags = 0;
 
 	priv = devm_kzalloc(dev, sizeof(struct clk_bl808_i2c), GFP_KERNEL);
 	if (priv == NULL)

@@ -241,7 +241,7 @@ static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate, unsi
 {
 	u32 divider = clk_bl808_i2c_calc_divider(rate, *parent_rate);
 
-	return *parent_rate/((divider + 1) * 4);
+	return *parent_rate / ((divider + 1) * 4);
 }
 
 static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
@@ -254,7 +254,7 @@ static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long 
 
 	divider = val & 0xff;
 
-	return parent_rate/((divider + 1) * 4);
+	return parent_rate / ((divider + 1) * 4);
 }
 
 static const struct clk_ops clk_bl808_i2c_ops = {
@@ -573,15 +573,14 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 		tx_cnt = (config_1 & BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_TX_FIFO_CNT_SHIFT;
 		rx_cnt = (config_1 & BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_MASK) >> BL808_I2C_FIFO_CONFIG_1_RX_FIFO_CNT_SHIFT;
 
-		if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_OVFLW) {
-			dev_err(i2c_dev->dev, "RX FIFO Overflow, cnt=%d\n", rx_cnt);
-		} else if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_UDFLW) {
-			dev_err(i2c_dev->dev, "RX FIFO Underflow, cnt=%d\n", rx_cnt);
-		} else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_OVFLW) {
-			dev_err(i2c_dev->dev, "TX FIFO Overflow, cnt=%d\n", tx_cnt);
-		} else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_UDFLW) {
-			dev_err(i2c_dev->dev, "TX FIFO Underflow, cnt=%d\n", tx_cnt);
-		}
+		if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_OVFLW)
+			dev_err(dev, "RX FIFO Overflow, cnt=%d\n", rx_cnt);
+		else if (config_0 & BL808_I2C_FIFO_CONFIG_0_RX_FIFO_UDFLW)
+			dev_err(dev, "RX FIFO Underflow, cnt=%d\n", rx_cnt);
+		else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_OVFLW)
+			dev_err(dev, "TX FIFO Overflow, cnt=%d\n", tx_cnt);
+		else if (config_0 & BL808_I2C_FIFO_CONFIG_0_TX_FIFO_UDFLW)
+			dev_err(dev, "TX FIFO Underflow, cnt=%d\n", tx_cnt);
 
 		i2c_dev->msg_err = -EIO;
 		bl808_i2c_clear_fifo_err(i2c_dev);

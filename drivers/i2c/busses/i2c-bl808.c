@@ -185,8 +185,9 @@ struct bl808_i2c_dev {
 	u16 msg_buf_remaining;
 };
 
-static inline void bl808_i2c_writel(struct bl808_i2c_dev *i2c_dev,
-				    u32 reg, u32 val)
+static inline void bl808_i2c_writel(struct bl808_i2c_dev *i2c_dev, u32 reg,
+				    u32 val)
+
 {
 	writel(val, i2c_dev->regs + reg);
 }
@@ -202,12 +203,14 @@ struct clk_bl808_i2c {
 	struct bl808_i2c_dev *i2c_dev;
 };
 
-static u32 clk_bl808_i2c_calc_divider(unsigned long rate, unsigned long parent_rate)
+static u32 clk_bl808_i2c_calc_divider(unsigned long rate,
+				      unsigned long parent_rate)
 {
 	return ((parent_rate / 4) / rate) - 1;
 }
 
-static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigned long parent_rate)
+static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate,
+				  unsigned long parent_rate)
 {
 	struct clk_bl808_i2c *div = to_clk_bl808_i2c(hw);
 	struct device *dev = div->i2c_dev->dev;
@@ -221,10 +224,12 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
 
 	if (divider > 0xff) {
 		divider = 0xff;
-		dev_warn(dev, "requested rate %lu is slower than minmum, setting to slowest possible rate\n", rate);
+		dev_warn(dev, "requested rate %lu is slower than minmum, setting to slowest possible rate\n",
+			 rate);
 	}
 
-	dev_dbg(dev, "requested rate: %lu, parent rate: %lu, divider 0x%x\n", rate, parent_rate, divider);
+	dev_dbg(dev, "requested rate: %lu, parent rate: %lu, divider 0x%x\n",
+		rate, parent_rate, divider);
 
 	val =  (divider & 0xff) << BL808_I2C_PRD_S_PH_0_SHIFT;
 	val |= (divider & 0xff) << BL808_I2C_PRD_S_PH_1_SHIFT;
@@ -238,14 +243,17 @@ static int clk_bl808_i2c_set_rate(struct clk_hw *hw, unsigned long rate, unsigne
 	return 0;
 }
 
-static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate, unsigned long *parent_rate)
+static long clk_bl808_i2c_round_rate(struct clk_hw *hw, unsigned long rate,
+				     unsigned long *parent_rate)
 {
 	u32 divider = clk_bl808_i2c_calc_divider(rate, *parent_rate);
 
 	return *parent_rate / ((divider + 1) * 4);
 }
 
-static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
+static unsigned long clk_bl808_i2c_recalc_rate(struct clk_hw *hw,
+					       unsigned long parent_rate)
+
 {
 	u32 val;
 	u32 divider;
@@ -264,7 +272,8 @@ static const struct clk_ops clk_bl808_i2c_ops = {
 	.recalc_rate = clk_bl808_i2c_recalc_rate,
 };
 
-static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk, struct bl808_i2c_dev *i2c_dev)
+static struct clk *bl808_i2c_register_div(struct device *dev, struct clk *mclk,
+					  struct bl808_i2c_dev *i2c_dev)
 {
 	struct clk_init_data init = {};
 	struct clk_bl808_i2c *priv;
@@ -478,7 +487,9 @@ static int bl808_i2c_start_transfer(struct bl808_i2c_dev *i2c_dev)
 	/* linux handles sub address via data bytes */
 	if (i2c_dev->num_msgs > 0) {
 		nxt_msg = i2c_dev->curr_msg + 1;
-		combined_message = (msg->len <= 4) && !(msg->flags & I2C_M_RD) && (nxt_msg->flags & I2C_M_RD) && (msg->addr == nxt_msg->addr);
+		combined_message = (msg->len <= 4) && !(msg->flags & I2C_M_RD) &&
+				   (nxt_msg->flags & I2C_M_RD) &&
+				   (msg->addr == nxt_msg->addr);
 		if (combined_message) {
 			subaddr = 0;
 			for(u8 i = 0; i < msg->len; i++) {
@@ -552,7 +563,8 @@ static irqreturn_t bl808_i2c_isr(int this_isq, void *data)
 			bl808_drain_rx_fifo(i2c_dev);
 
 		if (i2c_dev->msg_buf_remaining){
-			dev_err(dev, "got end interrupt but msg_buf_remaining. %u\n", i2c_dev->msg_buf_remaining);
+			dev_err(dev, "got end interrupt but msg_buf_remaining. %u\n",
+				i2c_dev->msg_buf_remaining);
 			i2c_dev->msg_err = -EREMOTEIO;
 		} else if (i2c_dev->num_msgs) {
 			i2c_dev->curr_msg++;
@@ -663,7 +675,8 @@ static int bl808_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 	if (!i2c_dev->msg_err)
 		return num;
 
-	dev_dbg(i2c_dev->dev, "i2c transfer failed: 0x%x | %d\n", i2c_dev->msg_err, i2c_dev->msg_err);
+	dev_dbg(i2c_dev->dev, "i2c transfer failed: 0x%x | %d\n",
+		i2c_dev->msg_err, i2c_dev->msg_err);
 	return i2c_dev->msg_err;
 }
 

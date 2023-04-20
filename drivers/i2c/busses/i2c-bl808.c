@@ -434,26 +434,26 @@ static void bl808_i2c_disable(struct bl808_i2c_dev *i2c_dev)
 	bl808_i2c_clear_interrupts(i2c_dev);
 }
 
-static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts)
+static void bl808_i2c_enable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 irqs)
 {
 	u32 val;
 
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-	val |= (interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_EN_SHIFT;
-	val &= ~((interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_MASK_SHIFT);
+	val |= (irqs & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_EN_SHIFT;
+	val &= ~((irqs & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_MASK_SHIFT);
 
 	bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
 
-static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 interrupts)
+static void bl808_i2c_disable_interrupts(struct bl808_i2c_dev *i2c_dev, u32 irqs)
 {
 	u32 val;
 
 	val = bl808_i2c_readl(i2c_dev, BL808_I2C_STS);
 
-	val &= ~((interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_EN_SHIFT);
-	val |= (interrupts & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_MASK_SHIFT;
+	val &= ~((irqs & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_EN_SHIFT);
+	val |= (irqs & BL808_I2C_STS_ALL_INT) << BL808_I2C_STS_MASK_SHIFT;
 
 	bl808_i2c_writel(i2c_dev, BL808_I2C_STS, val);
 }
